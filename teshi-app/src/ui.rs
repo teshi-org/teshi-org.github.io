@@ -49,6 +49,9 @@ impl AppUi {
     }
 
     pub fn render(&mut self, f: &mut Frame, state: &mut AppState) {
+        // Fresh slate for clickable regions each frame
+        state.clickable_regions.clear();
+
         let area = f.area();
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -149,7 +152,7 @@ impl AppUi {
 
     // ── Tab bar ──
 
-    fn render_tabs(&self, f: &mut Frame, area: Rect, s: &AppState) {
+    fn render_tabs(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
         f.render_widget(
             Tabs::new(
                 TAB_NAMES
@@ -163,6 +166,13 @@ impl AppUi {
             .divider(" "),
             area,
         );
+        // Register tab regions for mouse hit-testing
+        s.clickable_regions
+            .push(crate::ClickableRegion::Tab(0));
+        s.clickable_regions
+            .push(crate::ClickableRegion::Tab(1));
+        s.clickable_regions
+            .push(crate::ClickableRegion::Tab(2));
     }
 
     // ── Content dispatch ──
@@ -178,7 +188,7 @@ impl AppUi {
 
     // ── Explore tab ──
 
-    fn render_explore(&self, f: &mut Frame, area: Rect, s: &AppState) {
+    fn render_explore(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
         if s.show_raw_feature {
             self.render_raw_feature(f, area, s);
             return;
@@ -286,21 +296,33 @@ impl AppUi {
         }
     }
 
-    fn feature_list(&self, f: &mut Frame, area: Rect, s: &AppState) {
+    fn feature_list(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
         let b = Block::default()
             .borders(Borders::ALL)
             .padding(Padding::uniform(1))
             .title(" Features ")
             .title_style(self.block_title_style(s.explore_focus == ColumnFocus::Feature));
+        let inner = b.inner(area);
         let mut lines: Vec<Line> = Vec::new();
-        for (i, feat) in s.project.features.iter().enumerate() {
-            let name = feat
-                .file_path
-                .file_stem()
-                .map(|x| x.to_string_lossy().to_string())
-                .unwrap_or_else(|| "?".into());
-            let sel = i == s.explore_selected_feature;
-            let is_focused = sel && s.explore_focus == ColumnFocus::Feature;
+
+        // Pre-collect names to avoid borrow conflict with clickable_regions
+        let names: Vec<String> = s
+            .project
+            .features
+            .iter()
+            .map(|f| {
+                f.file_path
+                    .file_stem()
+                    .map(|x| x.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "?".into())
+            })
+            .collect();
+        let selected = s.explore_selected_feature;
+        let focused_col = s.explore_focus;
+
+        for (i, name) in names.iter().enumerate() {
+            let sel = i == selected;
+            let is_focused = sel && focused_col == ColumnFocus::Feature;
             let st = if is_focused {
                 self.selected_style(true)
             } else if sel {
@@ -320,22 +342,42 @@ impl AppUi {
             Paragraph::new(lines).block(b).wrap(Wrap { trim: false }),
             area,
         );
+
+        // Register clickable regions for each feature row
+        for i in 0..names.len() {
+            s.clickable_regions.push(crate::ClickableRegion::ExploreFeature {
+                feature_idx: i,
+                row_y: inner.y + i as u16,
+                col_x: inner.x,
+                col_right: inner.right(),
+            });
+        }
     }
 
-    fn scenario_list(&self, f: &mut Frame, area: Rect, s: &AppState) {
-        let feat = s.selected_feature();
+    fn scenario_list(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
+        // Pre-extract data to avoid borrow conflicts
+        let feat_exists = s.selected_feature().is_some();
         let fi = s.selected_feature_index();
-        let n = feat.map(|f| f.scenarios.len()).unwrap_or(0);
+        let scenario_count = s
+            .selected_feature()
+            .map(|f| f.scenarios.len())
+            .unwrap_or(0);
+        let selected_scenario = s.explore_selected_scenario;
+        let focused_col = s.explore_focus;
+
+        let n = scenario_count;
         let b = Block::default()
             .borders(Borders::ALL)
             .padding(Padding::uniform(1))
             .title(format!(" Scenarios ({}) ", n))
-            .title_style(self.block_title_style(s.explore_focus == ColumnFocus::Scenario));
+            .title_style(self.block_title_style(focused_col == ColumnFocus::Scenario));
+        let inner = b.inner(area);
         let mut lines: Vec<Line> = Vec::new();
-        if let Some(feat) = feat {
+
+        if let Some(feat) = s.selected_feature() {
             for (i, sc) in feat.scenarios.iter().enumerate() {
-                let sel = i == s.explore_selected_scenario;
-                let is_focused = sel && s.explore_focus == ColumnFocus::Scenario;
+                let sel = i == selected_scenario;
+                let is_focused = sel && focused_col == ColumnFocus::Scenario;
                 let st = if is_focused {
                     self.selected_style(true)
                 } else if sel {
@@ -366,7 +408,7 @@ impl AppUi {
                     Span::styled(format!(" {}{}", kind_icon, sc.name), st),
                 ]));
             }
-            if feat.scenarios.is_empty() {
+            if scenario_count == 0 {
                 lines.push(Line::from(Span::styled(
                     "  (no scenarios)",
                     Style::default().fg(TEXT_MUTED),
@@ -382,16 +424,31 @@ impl AppUi {
             Paragraph::new(lines).block(b).wrap(Wrap { trim: false }),
             area,
         );
+
+        // Register clickable regions after rendering (no borrow conflict)
+        if feat_exists {
+            for i in 0..scenario_count {
+                s.clickable_regions.push(crate::ClickableRegion::ExploreScenario {
+                    scenario_idx: i,
+                    row_y: inner.y + i as u16,
+                    col_x: inner.x,
+                    col_right: inner.right(),
+                });
+            }
+        }
     }
 
-    fn step_view(&self, f: &mut Frame, area: Rect, s: &AppState) {
+    fn step_view(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
         let b = Block::default()
             .borders(Borders::ALL)
             .padding(Padding::uniform(1))
             .title(" Steps ")
             .title_style(self.block_title_style(s.explore_focus == ColumnFocus::Step));
+        let inner = b.inner(area);
         let mut lines: Vec<Line> = Vec::new();
+        let mut line_row = inner.y;
 
+        // Pre-extract data to avoid borrow conflicts
         let feature = s.selected_feature();
         let scenario = s.selected_scenario();
         let background_steps = feature
@@ -399,25 +456,30 @@ impl AppUi {
             .map(|bg| bg.steps.as_slice())
             .unwrap_or(&[]);
         let scenario_steps = scenario.map(|s| s.steps.as_slice()).unwrap_or(&[]);
+        let bg_count = background_steps.len();
+        let sc_step_count = scenario_steps.len();
         let is_focused = s.explore_focus == ColumnFocus::Step;
         let highlight_style = self.selected_style(is_focused);
+        let selected_step = s.explore_selected_step;
 
-        if background_steps.is_empty() && scenario_steps.is_empty() {
+        if bg_count == 0 && sc_step_count == 0 {
             lines.push(Line::from(Span::styled(
                 "  (no steps)",
                 Style::default().fg(TEXT_MUTED),
             )));
+            line_row += 1;
         } else {
             let mut last_major: Option<Color> = None;
 
             // ── Background steps ──
-            if !background_steps.is_empty() {
+            if bg_count > 0 {
                 lines.push(Line::from(Span::styled(
                     " Background:",
                     Style::default()
                         .fg(TEXT_MUTED)
                         .add_modifier(Modifier::BOLD),
                 )));
+                line_row += 1;
                 for step in background_steps {
                     let kw_color =
                         self.keyword_color(step.keyword_type, &mut last_major);
@@ -431,8 +493,10 @@ impl AppUi {
                             Style::default().fg(TEXT_MUTED),
                         ),
                     ]));
+                    line_row += 1;
                 }
                 lines.push(Line::raw(""));
+                line_row += 1;
             }
 
             // ── Scenario tags ──
@@ -442,15 +506,16 @@ impl AppUi {
                         format!("  {}", sc.tags.join(" ")),
                         Style::default().fg(TEXT_MUTED),
                     )));
+                    line_row += 1;
                 }
             }
 
             // ── Scenario steps ──
-            last_major = None; // reset for scenario scope
+            last_major = None;
             for (i, step) in scenario_steps.iter().enumerate() {
                 let kw_color =
                     self.keyword_color(step.keyword_type, &mut last_major);
-                let is_selected = i == s.explore_selected_step;
+                let is_selected = i == selected_step;
                 let body_span = if is_selected {
                     Span::styled(format!(" {}", step.text), highlight_style)
                 } else {
@@ -463,21 +528,25 @@ impl AppUi {
                     ),
                     body_span,
                 ]));
+                line_row += 1;
             }
 
             // ── Examples tables ──
             if let Some(sc) = scenario {
                 for table in &sc.examples {
                     lines.push(Line::raw(""));
+                    line_row += 1;
                     lines.push(Line::from(Span::styled(
                         " Examples:",
                         Style::default().fg(HEADER_CYAN),
                     )));
+                    line_row += 1;
                     for row in render_examples_table_lines(&table.headers, &table.rows) {
                         lines.push(Line::from(Span::styled(
                             format!("  {}", row),
                             Style::default().fg(TEXT_MUTED),
                         )));
+                        line_row += 1;
                     }
                 }
             }
@@ -487,6 +556,28 @@ impl AppUi {
             Paragraph::new(lines).block(b).wrap(Wrap { trim: false }),
             area,
         );
+
+        // Register clickable step regions after rendering
+        // Recompute row position for the first scenario step
+        let mut step_row = inner.y;
+        if bg_count > 0 {
+            step_row += 1; // "Background:" header
+            step_row += bg_count as u16; // background step lines
+            step_row += 1; // empty line after background
+        }
+        if let Some(sc) = scenario
+            && !sc.tags.is_empty()
+        {
+            step_row += 1;
+        }
+        for i in 0..sc_step_count {
+            s.clickable_regions.push(crate::ClickableRegion::ExploreStep {
+                step_idx: i,
+                row_y: step_row + i as u16,
+                col_x: inner.x,
+                col_right: inner.right(),
+            });
+        }
     }
 
     /// Look up keyword colour and update `last_major` so And/But inherit the

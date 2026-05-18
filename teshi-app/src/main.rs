@@ -25,6 +25,31 @@ use ui::AppUi;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColumnFocus { Feature, Scenario, Step }
 
+/// A clickable region registered during rendering for mouse hit-testing.
+/// Stored in cell coordinates (col/row).
+#[derive(Debug, Clone)]
+pub enum ClickableRegion {
+    Tab(usize),
+    ExploreFeature {
+        feature_idx: usize,
+        row_y: u16,
+        col_x: u16,
+        col_right: u16,
+    },
+    ExploreScenario {
+        scenario_idx: usize,
+        row_y: u16,
+        col_x: u16,
+        col_right: u16,
+    },
+    ExploreStep {
+        step_idx: usize,
+        row_y: u16,
+        col_x: u16,
+        col_right: u16,
+    },
+}
+
 pub struct AppState {
     pub runner: RunnerConnection,
     pub active_tab: usize,
@@ -53,6 +78,8 @@ pub struct AppState {
     pub pending_chat_response: Option<String>,
     // Help overlay
     pub show_help: bool,
+    // Clickable regions (re-registered every render frame)
+    pub clickable_regions: Vec<ClickableRegion>,
 }
 
 impl AppState {
@@ -102,6 +129,7 @@ impl AppState {
             raw_feature_index: 0,
             pending_chat_response: None,
             show_help: false,
+            clickable_regions: Vec::new(),
         }
     }
 
@@ -211,42 +239,96 @@ impl AppState {
         }
     }
 
+    /// Convert viewport pixel coordinates to terminal cell coordinates.
+    fn pixel_to_cell(&self, px: u32, py: u32) -> (Option<u16>, Option<u16>) {
+        let window = match web_sys::window() {
+            Some(w) => w,
+            None => return (None, None),
+        };
+        let doc = match window.document() {
+            Some(d) => d,
+            None => return (None, None),
+        };
+        let terminal = match doc.get_element_by_id("terminal-body") {
+            Some(el) => el,
+            None => return (None, None),
+        };
+        let rect = terminal.get_bounding_client_rect();
+        let cell_x = (px as f64 - rect.left()) / 10.0;
+        let cell_y = (py as f64 - rect.top()) / 20.0;
+        if cell_x < 0.0 || cell_y < 0.0 {
+            return (None, None);
+        }
+        (Some(cell_x as u16), Some(cell_y as u16))
+    }
+
     pub fn handle_mouse(&mut self, event: &MouseEvent) {
         if event.event != MouseEventKind::Pressed || event.button != MouseButton::Left {
             return;
         }
-        let col = event.x.saturating_sub(5) / 10;
-        let row = event.y.saturating_sub(5) / 19;
+        let (col, row) = self.pixel_to_cell(event.x, event.y);
+        let (col, row) = match (col, row) {
+            (Some(c), Some(r)) => (c, r),
+            _ => return,
+        };
 
-        // Tab bar click (row 3)
-        if row == 3 && col < 30 {
-            self.active_tab = match col {
-                0..=9 => 0, 10..=19 => 1, _ => 2,
-            };
-            return;
-        }
-
-        // Explore tab: click on feature/scenario/step items
-        if self.active_tab == 0 && row >= 5 {
-            let item_idx = row.saturating_sub(6) as usize; // items start at row ~6
-            if col < 20 && item_idx < self.project.features.len() {
-                // Features column
-                self.explore_focus = ColumnFocus::Feature;
-                self.explore_selected_feature = item_idx;
-            } else if col >= 20 && col < 50 {
-                // Scenarios column
-                let feat = self.selected_feature();
-                if let Some(f) = feat {
-                    if item_idx < f.scenarios.len() {
+        // Hit-test against regions registered during rendering
+        for region in &self.clickable_regions {
+            match region {
+                ClickableRegion::Tab(tab_idx) => {
+                    // Tab labels on row 0 with hardcoded x-offsets matching Tabs widget
+                    // " Explore [1] " (14) + " " + " MindMap [2] " (14) + " " + " AI [3] " (9)
+                    let tab_starts: &[u16] = &[0, 15, 30];
+                    let tab_ends: &[u16] = &[14, 29, 39];
+                    if row == 0
+                        && col >= tab_starts[*tab_idx]
+                        && col < tab_ends[*tab_idx]
+                    {
+                        self.active_tab = *tab_idx;
+                        return;
+                    }
+                }
+                ClickableRegion::ExploreFeature {
+                    feature_idx,
+                    row_y,
+                    col_x,
+                    col_right,
+                } => {
+                    if row == *row_y && col >= *col_x && col < *col_right {
+                        self.explore_selected_feature = *feature_idx;
+                        self.explore_focus = ColumnFocus::Feature;
+                        self.explore_selected_scenario = 0;
+                        self.explore_selected_step = 0;
+                        return;
+                    }
+                }
+                ClickableRegion::ExploreScenario {
+                    scenario_idx,
+                    row_y,
+                    col_x,
+                    col_right,
+                } => {
+                    if row == *row_y && col >= *col_x && col < *col_right {
+                        self.explore_selected_scenario = *scenario_idx;
                         self.explore_focus = ColumnFocus::Scenario;
-                        self.explore_selected_scenario = item_idx;
+                        self.explore_selected_step = 0;
+                        return;
+                    }
+                }
+                ClickableRegion::ExploreStep {
+                    step_idx,
+                    row_y,
+                    col_x,
+                    col_right,
+                } => {
+                    if row == *row_y && col >= *col_x && col < *col_right {
+                        self.explore_selected_step = *step_idx;
+                        self.explore_focus = ColumnFocus::Step;
+                        return;
                     }
                 }
             }
         }
-
-        // MindMap tab: click to toggle tree nodes could go here
-        // (not implemented yet — requires mapping pixel coords to tree items)
     }
 
     pub fn handle_key(&mut self, code: KeyCode) -> bool {
