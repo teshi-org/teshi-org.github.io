@@ -2,3 +2,8 @@
 /resources/_gen/
 .hugo_build.lock
 .cursor/
+
+# Rust build artifacts
+teshi-app/target/
+vendor/ratzilla/target/
+Cargo.lock

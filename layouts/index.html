@@ -1,8 +1,88 @@
 {{ define "main" }}
-<main class="hero">
-  <img class="logo" src="/images/logo.png" alt="teshi logo" width="96" height="96">
-  <h1 class="brand">teshi</h1>
-  <p class="tagline">AI Testing Agent</p>
-</main>
-<a class="gh" href="https://github.com/teshi-org/teshi" rel="noopener">github</a>
+
+<nav class="nav" role="navigation">
+  <a class="nav-brand" href="/">
+    <img src="/images/logo.png" alt="" width="24" height="24" loading="lazy">
+    teshi
+  </a>
+  <ul class="nav-links">
+    <li><a href="https://github.com/teshi-org/teshi" rel="noopener">GitHub</a></li>
+    <li><a href="/app/" class="nav-cta">Open App</a></li>
+  </ul>
+</nav>
+
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <h1 class="hero-title">AI Testing Agent</h1>
+    <p class="hero-desc">Record browser interactions as Gherkin scenarios. Replay, automate, and debug with AI — all in your browser.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="/app/">Open in Browser</a>
+      <a class="btn btn-secondary" href="/app/?demo=true">Load Demo Data</a>
+    </div>
+  </div>
+</section>
+
+<div class="showcase">
+  <div class="container">
+    <div class="showcase-terminal">
+      <div class="showcase-cols">
+        <div class="showcase-col">
+          <div class="showcase-col-hdr">Features</div>
+          <div class="showcase-row showcase-row--sel"><span class="showcase-ptr">▸</span> login.feature</div>
+          <div class="showcase-row"><span class="showcase-ptr"></span> checkout.feature</div>
+          <div class="showcase-row"><span class="showcase-ptr"></span> search.feature</div>
+        </div>
+        <div class="showcase-col">
+          <div class="showcase-col-hdr">Scenarios</div>
+          <div class="showcase-row showcase-row--sel"><span class="showcase-ptr">▸</span><span class="showcase-pass"></span> Successful login</div>
+          <div class="showcase-row"><span class="showcase-ptr"></span><span class="showcase-fail"></span> Wrong password</div>
+          <div class="showcase-row"><span class="showcase-ptr"></span><span class="showcase-idle"></span> Empty fields</div>
+        </div>
+        <div class="showcase-col">
+          <div class="showcase-col-hdr">Steps</div>
+          <div class="showcase-row showcase-row--sel"><span class="showcase-ptr">▸</span><span class="kw-giv">Given</span> user is on login page</div>
+          <div class="showcase-row"><span class="showcase-ptr"></span><span class="kw-whe">When</span> user enters valid credentials</div>
+          <div class="showcase-row"><span class="showcase-ptr"></span><span class="kw-the">Then</span> redirect to dashboard</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section class="features">
+  <div class="container">
+    <div class="features-grid">
+      <div class="feature-item">
+        <h3>Record &amp; Replay</h3>
+        <p>Capture browser interactions as Gherkin scenarios. Replay them across environments with pixel-perfect accuracy.</p>
+      </div>
+      <div class="feature-item">
+        <h3>AI-Powered</h3>
+        <p>Chat with an AI assistant to debug failures, generate step definitions, and auto-heal selectors.</p>
+      </div>
+      <div class="feature-item">
+        <h3>CI/CD Ready</h3>
+        <p>Run tests in any pipeline — GitHub Actions, GitLab CI, and more. The headless runner integrates in minutes.</p>
+      </div>
+      <div class="feature-item">
+        <h3>Open Source</h3>
+        <p>MIT licensed. No sign-ups, no paywalls, no data collection. Free for everyone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-inner">
+      <span class="footer-copy">&copy; teshi · v0.1.0</span>
+      <div class="footer-links">
+        <a href="https://github.com/teshi-org/teshi" rel="noopener">GitHub</a>
+        <a href="https://github.com/teshi-org/teshi/issues" rel="noopener">Issues</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
 {{ end }}
