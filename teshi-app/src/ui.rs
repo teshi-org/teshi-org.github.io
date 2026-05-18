@@ -446,7 +446,6 @@ impl AppUi {
             .title_style(self.block_title_style(s.explore_focus == ColumnFocus::Step));
         let inner = b.inner(area);
         let mut lines: Vec<Line> = Vec::new();
-        let mut line_row = inner.y;
 
         // Pre-extract data to avoid borrow conflicts
         let feature = s.selected_feature();
@@ -467,7 +466,6 @@ impl AppUi {
                 "  (no steps)",
                 Style::default().fg(TEXT_MUTED),
             )));
-            line_row += 1;
         } else {
             let mut last_major: Option<Color> = None;
 
@@ -479,7 +477,6 @@ impl AppUi {
                         .fg(TEXT_MUTED)
                         .add_modifier(Modifier::BOLD),
                 )));
-                line_row += 1;
                 for step in background_steps {
                     let kw_color =
                         self.keyword_color(step.keyword_type, &mut last_major);
@@ -493,10 +490,8 @@ impl AppUi {
                             Style::default().fg(TEXT_MUTED),
                         ),
                     ]));
-                    line_row += 1;
                 }
                 lines.push(Line::raw(""));
-                line_row += 1;
             }
 
             // ── Scenario tags ──
@@ -506,7 +501,6 @@ impl AppUi {
                         format!("  {}", sc.tags.join(" ")),
                         Style::default().fg(TEXT_MUTED),
                     )));
-                    line_row += 1;
                 }
             }
 
@@ -528,25 +522,21 @@ impl AppUi {
                     ),
                     body_span,
                 ]));
-                line_row += 1;
             }
 
             // ── Examples tables ──
             if let Some(sc) = scenario {
                 for table in &sc.examples {
                     lines.push(Line::raw(""));
-                    line_row += 1;
                     lines.push(Line::from(Span::styled(
                         " Examples:",
                         Style::default().fg(HEADER_CYAN),
                     )));
-                    line_row += 1;
                     for row in render_examples_table_lines(&table.headers, &table.rows) {
                         lines.push(Line::from(Span::styled(
                             format!("  {}", row),
                             Style::default().fg(TEXT_MUTED),
                         )));
-                        line_row += 1;
                     }
                 }
             }
