@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#1a1a1a" />
-    <title>teshi — AI Testing Agent</title>
+    <title>Teshi — AI Testing Agent</title>
     <style>
       * {
         margin: 0;
@@ -181,7 +181,7 @@
         <span class="term-dot"></span>
         <span class="term-dot"></span>
         <span class="term-dot"></span>
-        <span id="terminal-title">teshi — AI Testing Agent</span>
+        <span id="terminal-title">Teshi — AI Testing Agent</span>
       </div>
       <div id="terminal-body"></div>
     </div>
@@ -210,6 +210,18 @@
           }
         }, 10000);
       })();
+    </script>
+
+    <!-- Forward wheel events to parent when embedded in an iframe -->
+    <script>
+    (function() {
+      try { if (window.self === window.top) return; } catch(e) { return; }
+      var body = document.getElementById('terminal-body');
+      if (!body) return;
+      body.addEventListener('wheel', function(e) {
+        parent.postMessage({ type: '__teshi_scroll', deltaY: e.deltaY }, '*');
+      }, { passive: true });
+    })();
     </script>
   </body>
 </html>

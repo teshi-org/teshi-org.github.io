@@ -35,19 +35,22 @@ pub enum ClickableRegion {
     Tree,
     ExploreFeature {
         feature_idx: usize,
-        row_y: u16,
+        row_y_start: u16,
+        row_y_end: u16,
         col_x: u16,
         col_right: u16,
     },
     ExploreScenario {
         scenario_idx: usize,
-        row_y: u16,
+        row_y_start: u16,
+        row_y_end: u16,
         col_x: u16,
         col_right: u16,
     },
     ExploreStep {
         step_idx: usize,
-        row_y: u16,
+        row_y_start: u16,
+        row_y_end: u16,
         col_x: u16,
         col_right: u16,
     },
@@ -493,11 +496,12 @@ impl AppState {
                 }
                 ClickableRegion::ExploreFeature {
                     feature_idx,
-                    row_y,
+                    row_y_start,
+                    row_y_end,
                     col_x,
                     col_right,
                 } => {
-                    if row == *row_y && col >= *col_x && col < *col_right {
+                    if row >= *row_y_start && row < *row_y_end && col >= *col_x && col < *col_right {
                         self.explore_selected_feature = *feature_idx;
                         self.explore_focus = ColumnFocus::Feature;
                         self.explore_selected_scenario = 0;
@@ -507,11 +511,12 @@ impl AppState {
                 }
                 ClickableRegion::ExploreScenario {
                     scenario_idx,
-                    row_y,
+                    row_y_start,
+                    row_y_end,
                     col_x,
                     col_right,
                 } => {
-                    if row == *row_y && col >= *col_x && col < *col_right {
+                    if row >= *row_y_start && row < *row_y_end && col >= *col_x && col < *col_right {
                         self.explore_selected_scenario = *scenario_idx;
                         self.explore_focus = ColumnFocus::Scenario;
                         self.explore_selected_step = 0;
@@ -520,11 +525,12 @@ impl AppState {
                 }
                 ClickableRegion::ExploreStep {
                     step_idx,
-                    row_y,
+                    row_y_start,
+                    row_y_end,
                     col_x,
                     col_right,
                 } => {
-                    if row == *row_y && col >= *col_x && col < *col_right {
+                    if row >= *row_y_start && row < *row_y_end && col >= *col_x && col < *col_right {
                         self.explore_selected_step = *step_idx;
                         self.explore_focus = ColumnFocus::Step;
                         return;
@@ -917,23 +923,35 @@ fn main() {
         s.handle_mouse(&mouse_event);
     });
 
-    // Wheel/scroll event listener (ratzilla doesn't expose this)
+    // Wheel/scroll event listener (ratzilla doesn't expose this).
+    // Skip when embedded in an iframe so parent-page scrolling works naturally.
     {
-        use wasm_bindgen::prelude::Closure;
-        use wasm_bindgen::JsCast;
-        let state_scroll = state.clone();
-        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-            if let Some(el) = doc.get_element_by_id("terminal-body") {
-                let wheel_closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::WheelEvent| {
-                    let mut s = state_scroll.borrow_mut();
-                    s.scroll_delta += event.delta_y();
-                    event.prevent_default();
-                });
-                let _ = el.add_event_listener_with_callback(
-                    "wheel",
-                    wheel_closure.as_ref().unchecked_ref(),
-                );
-                wheel_closure.forget();
+        use wasm_bindgen::JsValue;
+        let is_embedded = web_sys::window()
+            .and_then(|w| {
+                w.top().ok().flatten().map(|top| {
+                    JsValue::from(w.self_()) != JsValue::from(top)
+                })
+            })
+            .unwrap_or(false);
+
+        if !is_embedded {
+            use wasm_bindgen::prelude::Closure;
+            use wasm_bindgen::JsCast;
+            let state_scroll = state.clone();
+            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                if let Some(el) = doc.get_element_by_id("terminal-body") {
+                    let wheel_closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::WheelEvent| {
+                        let mut s = state_scroll.borrow_mut();
+                        s.scroll_delta += event.delta_y();
+                        event.prevent_default();
+                    });
+                    let _ = el.add_event_listener_with_callback(
+                        "wheel",
+                        wheel_closure.as_ref().unchecked_ref(),
+                    );
+                    wheel_closure.forget();
+                }
             }
         }
     }

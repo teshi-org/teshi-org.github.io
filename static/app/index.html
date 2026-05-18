@@ -162,7 +162,7 @@
         }
       }
     </style>
-  <link rel="modulepreload" href="/app/teshi-app-c7b6d6caee9cea06.js" crossorigin="anonymous" integrity="sha384-4XksFPaHOLX7p/PAnMmXV+ZiNF4aa3QPo429qnoitWGay6FSXZy9hp3mrxfX123A"><link rel="preload" href="/app/teshi-app-c7b6d6caee9cea06_bg.wasm" crossorigin="anonymous" integrity="sha384-h1y3aKbEUpN+jN+m05AiQz3mS0bk0rG/oeBZclczR8uIBg/HuQjNvKykiEdemOnQ" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/app/teshi-app-2292dc5d22d46b74.js" crossorigin="anonymous" integrity="sha384-x1iCI4sel8iz7LtHZDk/NYcVWuj3QhXmskl8ND6gS4gjDakJKQ0yiWiKsYABiQVn"><link rel="preload" href="/app/teshi-app-2292dc5d22d46b74_bg.wasm" crossorigin="anonymous" integrity="sha384-bg8t5AvD1wfrIjK10t7OrtfhmSUt8h6byiUGm4Uh6K0JAtNzSorbspWvP9nr4AAO" as="fetch" type="application/wasm"></head>
   <body>
     <div id="splash">
       <img
@@ -188,8 +188,8 @@
 
     
 <script type="module">
-import init, * as bindings from '/app/teshi-app-c7b6d6caee9cea06.js';
-const wasm = await init({ module_or_path: '/app/teshi-app-c7b6d6caee9cea06_bg.wasm' });
+import init, * as bindings from '/app/teshi-app-2292dc5d22d46b74.js';
+const wasm = await init({ module_or_path: '/app/teshi-app-2292dc5d22d46b74_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -221,6 +221,18 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
           }
         }, 10000);
       })();
+    </script>
+
+    <!-- Forward wheel events to parent when embedded in an iframe -->
+    <script>
+    (function() {
+      try { if (window.self === window.top) return; } catch(e) { return; }
+      var body = document.getElementById('terminal-body');
+      if (!body) return;
+      body.addEventListener('wheel', function(e) {
+        parent.postMessage({ type: '__teshi_scroll', deltaY: e.deltaY }, '*');
+      }, { passive: true });
+    })();
     </script>
   </body>
 </html>

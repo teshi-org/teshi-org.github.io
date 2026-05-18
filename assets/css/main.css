@@ -1,5 +1,5 @@
 /* ============================================================
-   teshi
+   Teshi
    ============================================================ */
 
 :root {
@@ -36,7 +36,7 @@ img { display: block; max-width: 100%; }
 
 .container {
   width: 100%;
-  max-width: 960px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0 var(--space-lg);
 }
@@ -61,7 +61,7 @@ img { display: block; max-width: 100%; }
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 960px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 14px var(--space-lg);
 }
@@ -102,13 +102,13 @@ img { display: block; max-width: 100%; }
    HERO
    ============================================================ */
 .hero {
-  min-height: 80vh;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   position: relative;
   overflow: hidden;
-  padding: 80px 0 0;
+  padding: 100px 0 0;
 }
 
 .hero-bg {
@@ -125,7 +125,7 @@ img { display: block; max-width: 100%; }
 .hero-content {
   position: relative;
   z-index: 1;
-  text-align: center;
+  text-align: left;
 }
 
 .hero-title {
@@ -149,7 +149,7 @@ img { display: block; max-width: 100%; }
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-md);
 }
 
@@ -179,72 +179,27 @@ img { display: block; max-width: 100%; }
 .btn-secondary:hover { border-color: var(--border-hover); }
 
 /* ============================================================
-   SHOWCASE (terminal mockup)
+   SHOWCASE (live app iframe)
    ============================================================ */
 .showcase {
-  padding: 0 0 var(--space-xl);
-  margin-top: -3rem;
+  padding: var(--space-lg) 0 var(--space-xl);
 }
 
-.showcase-terminal {
+.showcase-frame {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  line-height: 1.5;
+  height: 520px;
+  position: relative;
 }
 
-.showcase-cols {
-  display: grid;
-  grid-template-columns: 22% 33% 45%;
+.showcase-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
 }
-
-.showcase-col {
-  border-right: 1px solid var(--border);
-  padding: 6px 0;
-}
-.showcase-col:last-child { border-right: none; }
-
-.showcase-col-hdr {
-  padding: 2px 12px 6px;
-  font-size: 0.6rem;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.showcase-row {
-  padding: 2px 12px;
-  color: var(--text-muted);
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.showcase-row--sel {
-  background: rgba(13, 115, 115, 0.08);
-  color: var(--text);
-}
-
-.showcase-ptr { color: transparent; width: 10px; flex-shrink: 0; }
-.showcase-row--sel .showcase-ptr { color: var(--accent); }
-
-.showcase-pass,
-.showcase-fail,
-.showcase-idle {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.showcase-pass { background: #27c93f; }
-.showcase-fail { background: #ff5f56; }
-.showcase-idle { background: rgba(255,255,255,0.1); }
-
-.kw-giv { color: #569cd6; font-weight: 600; }
-.kw-whe { color: #e2b714; font-weight: 600; }
-.kw-the { color: #6a9955; font-weight: 600; }
 
 /* ============================================================
    FEATURES
@@ -311,12 +266,7 @@ img { display: block; max-width: 100%; }
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
-  .showcase-cols { grid-template-columns: 1fr; }
-  .showcase-col {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-  .showcase-col:last-child { border-bottom: none; }
+  .showcase-frame { height: 400px; }
 
   .features-grid { grid-template-columns: 1fr; }
 

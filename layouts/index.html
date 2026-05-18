@@ -4,7 +4,7 @@
   <div class="nav-inner">
     <a class="nav-brand" href="/">
       <img src="/images/logo.png" alt="" width="24" height="24" loading="lazy">
-      teshi
+      Teshi
     </a>
     <ul class="nav-links">
       <li><a href="https://github.com/teshi-org/teshi" rel="noopener">GitHub</a></li>
@@ -27,32 +27,19 @@
   </div>
 </section>
 
-<div class="showcase">
+<section class="showcase">
   <div class="container">
-    <div class="showcase-terminal">
-      <div class="showcase-cols">
-        <div class="showcase-col">
-          <div class="showcase-col-hdr">Features</div>
-          <div class="showcase-row showcase-row--sel"><span class="showcase-ptr">▸</span> login.feature</div>
-          <div class="showcase-row"><span class="showcase-ptr"></span> checkout.feature</div>
-          <div class="showcase-row"><span class="showcase-ptr"></span> search.feature</div>
-        </div>
-        <div class="showcase-col">
-          <div class="showcase-col-hdr">Scenarios</div>
-          <div class="showcase-row showcase-row--sel"><span class="showcase-ptr">▸</span><span class="showcase-pass"></span> Successful login</div>
-          <div class="showcase-row"><span class="showcase-ptr"></span><span class="showcase-fail"></span> Wrong password</div>
-          <div class="showcase-row"><span class="showcase-ptr"></span><span class="showcase-idle"></span> Empty fields</div>
-        </div>
-        <div class="showcase-col">
-          <div class="showcase-col-hdr">Steps</div>
-          <div class="showcase-row showcase-row--sel"><span class="showcase-ptr">▸</span><span class="kw-giv">Given</span> user is on login page</div>
-          <div class="showcase-row"><span class="showcase-ptr"></span><span class="kw-whe">When</span> user enters valid credentials</div>
-          <div class="showcase-row"><span class="showcase-ptr"></span><span class="kw-the">Then</span> redirect to dashboard</div>
-        </div>
-      </div>
+    <div class="showcase-frame">
+      <iframe
+        src="/app/"
+        class="showcase-iframe"
+        loading="lazy"
+        title="Teshi app — interactive demo"
+        allow="clipboard-read; clipboard-write"
+      ></iframe>
     </div>
   </div>
-</div>
+</section>
 
 <section class="features">
   <div class="container">
@@ -80,7 +67,7 @@
 <footer class="footer">
   <div class="container">
     <div class="footer-inner">
-      <span class="footer-copy">&copy; teshi · v0.1.0</span>
+      <span class="footer-copy">&copy; Teshi · v0.1.0</span>
       <div class="footer-links">
         <a href="https://github.com/teshi-org/teshi" rel="noopener">GitHub</a>
         <a href="https://github.com/teshi-org/teshi/issues" rel="noopener">Issues</a>
@@ -88,5 +75,28 @@
     </div>
   </div>
 </footer>
+
+<script>
+(function() {
+  var frame = document.querySelector('.showcase-iframe');
+  if (!frame) return;
+  var acc = 0;
+  var raf = null;
+
+  addEventListener('message', function(e) {
+    if (e.source === frame.contentWindow && e.data && e.data.type === '__teshi_scroll') {
+      acc += e.data.deltaY * 3;
+      if (!raf) {
+        raf = requestAnimationFrame(function() {
+          var d = Math.round(acc);
+          if (d) window.scrollBy(0, d);
+          acc = 0;
+          raf = null;
+        });
+      }
+    }
+  });
+})();
+</script>
 
 {{ end }}

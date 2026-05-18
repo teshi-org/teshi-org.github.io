@@ -304,6 +304,14 @@ impl AppUi {
             .title_style(self.block_title_style(s.explore_focus == ColumnFocus::Feature));
         let inner = b.inner(area);
         let mut lines: Vec<Line> = Vec::new();
+        let col_width = inner.width;
+
+        let line_rows = |content: &str| -> u16 {
+            if col_width < 2 { return 1; }
+            let w = content.len();
+            if w == 0 { return 1; }
+            ((w + col_width as usize - 1) / col_width as usize).max(1) as u16
+        };
 
         // Pre-collect names to avoid borrow conflict with clickable_regions
         let names: Vec<String> = s
@@ -320,6 +328,9 @@ impl AppUi {
         let selected = s.explore_selected_feature;
         let focused_col = s.explore_focus;
 
+        let mut y_pos = inner.y;
+        let mut feature_rows: Vec<(u16, u16)> = Vec::with_capacity(names.len());
+
         for (i, name) in names.iter().enumerate() {
             let sel = i == selected;
             let is_focused = sel && focused_col == ColumnFocus::Feature;
@@ -331,6 +342,9 @@ impl AppUi {
                 Style::default()
             };
             lines.push(Line::from(Span::styled(format!(" {}", name), st)));
+            let start = y_pos;
+            y_pos += line_rows(&format!(" {}", name));
+            feature_rows.push((start, y_pos));
         }
         if lines.is_empty() {
             lines.push(Line::from(Span::styled(
@@ -344,10 +358,11 @@ impl AppUi {
         );
 
         // Register clickable regions for each feature row
-        for i in 0..names.len() {
+        for (i, (start, end)) in feature_rows.iter().enumerate() {
             s.clickable_regions.push(crate::ClickableRegion::ExploreFeature {
                 feature_idx: i,
-                row_y: inner.y + i as u16,
+                row_y_start: *start,
+                row_y_end: *end,
                 col_x: inner.x,
                 col_right: inner.right(),
             });
@@ -356,7 +371,6 @@ impl AppUi {
 
     fn scenario_list(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
         // Pre-extract data to avoid borrow conflicts
-        let feat_exists = s.selected_feature().is_some();
         let fi = s.selected_feature_index();
         let scenario_count = s
             .selected_feature()
@@ -373,6 +387,17 @@ impl AppUi {
             .title_style(self.block_title_style(focused_col == ColumnFocus::Scenario));
         let inner = b.inner(area);
         let mut lines: Vec<Line> = Vec::new();
+        let col_width = inner.width;
+
+        let line_rows = |content: &str| -> u16 {
+            if col_width < 2 { return 1; }
+            let w = content.len();
+            if w == 0 { return 1; }
+            ((w + col_width as usize - 1) / col_width as usize).max(1) as u16
+        };
+
+        let mut y_pos = inner.y;
+        let mut scenario_rows: Vec<(u16, u16)> = Vec::with_capacity(scenario_count);
 
         if let Some(feat) = s.selected_feature() {
             for (i, sc) in feat.scenarios.iter().enumerate() {
@@ -407,6 +432,9 @@ impl AppUi {
                     Span::styled(dot, Style::default().fg(dot_color)),
                     Span::styled(format!(" {}{}", kind_icon, sc.name), st),
                 ]));
+                let start = y_pos;
+                y_pos += line_rows(&format!(" {}{}", kind_icon, sc.name));
+                scenario_rows.push((start, y_pos));
             }
             if scenario_count == 0 {
                 lines.push(Line::from(Span::styled(
@@ -425,16 +453,15 @@ impl AppUi {
             area,
         );
 
-        // Register clickable regions after rendering (no borrow conflict)
-        if feat_exists {
-            for i in 0..scenario_count {
-                s.clickable_regions.push(crate::ClickableRegion::ExploreScenario {
-                    scenario_idx: i,
-                    row_y: inner.y + i as u16,
-                    col_x: inner.x,
-                    col_right: inner.right(),
-                });
-            }
+        // Register clickable regions for each scenario
+        for (i, (start, end)) in scenario_rows.iter().enumerate() {
+            s.clickable_regions.push(crate::ClickableRegion::ExploreScenario {
+                scenario_idx: i,
+                row_y_start: *start,
+                row_y_end: *end,
+                col_x: inner.x,
+                col_right: inner.right(),
+            });
         }
     }
 
@@ -460,12 +487,27 @@ impl AppUi {
         let is_focused = s.explore_focus == ColumnFocus::Step;
         let highlight_style = self.selected_style(is_focused);
         let selected_step = s.explore_selected_step;
+        let col_width = inner.width;
+
+        // Estimate how many terminal rows a rendered line occupies after wrapping.
+        let line_rows = |content: &str| -> u16 {
+            if col_width < 2 { return 1; }
+            let w = content.len();
+            if w == 0 { return 1; }
+            ((w + col_width as usize - 1) / col_width as usize).max(1) as u16
+        };
+
+        // Track actual rendered row position through all elements
+        let mut y_pos = inner.y;
+        // Store step boundaries: (row_y_start, row_y_end)
+        let mut step_rows: Vec<(u16, u16)> = Vec::with_capacity(sc_step_count);
 
         if bg_count == 0 && sc_step_count == 0 {
             lines.push(Line::from(Span::styled(
                 "  (no steps)",
                 Style::default().fg(TEXT_MUTED),
             )));
+            y_pos += 1;
         } else {
             let mut last_major: Option<Color> = None;
 
@@ -477,6 +519,7 @@ impl AppUi {
                         .fg(TEXT_MUTED)
                         .add_modifier(Modifier::BOLD),
                 )));
+                y_pos += line_rows(" Background:");
                 for step in background_steps {
                     let kw_color =
                         self.keyword_color(step.keyword_type, &mut last_major);
@@ -490,17 +533,21 @@ impl AppUi {
                             Style::default().fg(TEXT_MUTED),
                         ),
                     ]));
+                    y_pos += line_rows(&format!(" {:>6} {}", step.keyword, step.text));
                 }
                 lines.push(Line::raw(""));
+                y_pos += 1;
             }
 
             // ── Scenario tags ──
             if let Some(sc) = scenario {
                 if !sc.tags.is_empty() {
+                    let tag_line = format!("  {}", sc.tags.join(" "));
                     lines.push(Line::from(Span::styled(
-                        format!("  {}", sc.tags.join(" ")),
+                        tag_line.clone(),
                         Style::default().fg(TEXT_MUTED),
                     )));
+                    y_pos += line_rows(&tag_line);
                 }
             }
 
@@ -522,21 +569,29 @@ impl AppUi {
                     ),
                     body_span,
                 ]));
+                let start = y_pos;
+                let step_rows_len = line_rows(&format!(" {:>6} {}", step.keyword, step.text));
+                y_pos += step_rows_len;
+                step_rows.push((start, y_pos));
             }
 
             // ── Examples tables ──
             if let Some(sc) = scenario {
                 for table in &sc.examples {
                     lines.push(Line::raw(""));
+                    y_pos += 1;
                     lines.push(Line::from(Span::styled(
                         " Examples:",
                         Style::default().fg(HEADER_CYAN),
                     )));
+                    y_pos += line_rows(" Examples:");
                     for row in render_examples_table_lines(&table.headers, &table.rows) {
+                        let row_line = format!("  {}", row);
                         lines.push(Line::from(Span::styled(
-                            format!("  {}", row),
+                            row_line.clone(),
                             Style::default().fg(TEXT_MUTED),
                         )));
+                        y_pos += line_rows(&row_line);
                     }
                 }
             }
@@ -547,23 +602,12 @@ impl AppUi {
             area,
         );
 
-        // Register clickable step regions after rendering
-        // Recompute row position for the first scenario step
-        let mut step_row = inner.y;
-        if bg_count > 0 {
-            step_row += 1; // "Background:" header
-            step_row += bg_count as u16; // background step lines
-            step_row += 1; // empty line after background
-        }
-        if let Some(sc) = scenario
-            && !sc.tags.is_empty()
-        {
-            step_row += 1;
-        }
-        for i in 0..sc_step_count {
+        // Register clickable step regions using the tracked row ranges
+        for (i, (start, end)) in step_rows.iter().enumerate() {
             s.clickable_regions.push(crate::ClickableRegion::ExploreStep {
                 step_idx: i,
-                row_y: step_row + i as u16,
+                row_y_start: *start,
+                row_y_end: *end,
                 col_x: inner.x,
                 col_right: inner.right(),
             });

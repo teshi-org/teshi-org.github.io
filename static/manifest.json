@@ -1,6 +1,6 @@
 {
-  "name": "teshi — AI Testing Agent",
-  "short_name": "teshi",
+  "name": "Teshi — AI Testing Agent",
+  "short_name": "Teshi",
   "description": "Record browser interactions as Gherkin scenarios. Replay, automate, and debug with AI.",
   "start_url": "/app/",
   "display": "standalone",
