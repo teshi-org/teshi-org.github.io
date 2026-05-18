@@ -9,7 +9,7 @@ use ratzilla::ratatui::text::{Line, Span, Text};
 use ratzilla::ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Tabs, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use crate::{AppState, ColumnFocus, gherkin, mindmap};
+use crate::{AppState, ColumnFocus, gherkin, markdown, mindmap};
 
 const TAB_NAMES: &[&str] = &[" Explore [1] ", " MindMap [2] ", " AI [3] "];
 
@@ -1000,100 +1000,152 @@ impl AppUi {
 
     // ── AI Chat tab ──
 
-    fn render_ai_tab(&self, f: &mut Frame, area: Rect, s: &AppState) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(3), Constraint::Length(3)])
-            .split(area);
-
-        self.render_chat_messages(f, chunks[0], s);
-        self.render_chat_input(f, chunks[1], s);
+    fn render_ai_tab(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
+        // Layout: sidebar (left, 18 cols) + main (right)
+        if area.width < 25 || area.height < 3 { return; }
+        let [sidebar_area, main_area] =
+            Layout::horizontal([Constraint::Length(18), Constraint::Min(10)]).areas(area);
+        self.render_agent_sidebar(f, sidebar_area, s);
+        self.render_agent_chat(f, main_area, s);
     }
 
-    fn render_chat_messages(&self, f: &mut Frame, area: Rect, s: &AppState) {
+    fn render_agent_sidebar(&self, f: &mut Frame, area: Rect, _s: &AppState) {
+        if area.width < 5 || area.height < 3 { return; }
         let block = Block::default()
             .borders(Borders::ALL)
-            .padding(Padding::uniform(1))
-            .title(" Chat ")
-            .border_style(Style::default().fg(HEADER_CYAN));
+            .title(" Agents ")
+            .style(Style::default());
+        let inner = block.inner(area);
+        f.render_widget(block, area);
 
-        let mut lines: Vec<Line> = Vec::new();
+        let mut lines: Vec<Line<'static>> = Vec::new();
+        // Show a single "Default" agent (the website has only one conversation)
+        let prefix = "▸";
+        let status_char = "○";
+        let title = "Default";
+        let text = format!("{prefix} {status_char} {title}");
+        let style = Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD);
+        lines.push(Line::styled(text, style));
+
+        lines.push(Line::raw(""));
+        lines.push(Line::styled(" 1 agent ", Style::default().fg(TEXT_MUTED)));
+
+        let visible: Vec<Line<'static>> = lines.into_iter().take(inner.height as usize).collect();
+        f.render_widget(Paragraph::new(Text::from(visible)), inner);
+    }
+
+    fn render_agent_chat(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
+        if area.width < 10 || area.height < 3 { return; }
+
+        let block = Block::default().borders(Borders::ALL).title("AI Chat");
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+        if inner.width == 0 || inner.height == 0 { return; }
+
+        // Layout: chat history (top) + status bar (1) + input bar (bottom, min 3)
+        let status_height: u16 = 1;
+        let input_text_rows = s.chat_input.lines().count().max(1) as u16;
+        let input_height: u16 = (input_text_rows + 2).min((inner.height / 3).max(3));
+        let chat_height = inner.height.saturating_sub(status_height + input_height);
+
+        let chat_area = Rect::new(inner.x, inner.y, inner.width, chat_height);
+        let status_area = Rect::new(inner.x, inner.y + chat_height, inner.width, status_height);
+        let input_area = Rect::new(inner.x, inner.y + chat_height + status_height, inner.width, input_height);
+
+        // ── Chat history ──
+        let mut chat_lines: Vec<Line<'static>> = Vec::new();
+
+        if s.chat_messages.is_empty() {
+            chat_lines.push(Line::raw("Welcome to AI Chat! Type a message below and press Enter."));
+            chat_lines.push(Line::raw(""));
+        }
+
         for (role, content) in &s.chat_messages {
             let is_user = role == "user";
             let is_system = role == "system";
-            let role_label = if is_user {
-                " You"
-            } else if is_system {
-                " ●"
-            } else {
-                " AI"
-            };
-            let role_color = if is_user {
-                AI_USER
-            } else if is_system {
-                TEXT_MUTED
-            } else {
-                AI_ASSISTANT
-            };
+            let prefix = if is_user { "▶ You" } else if is_system { " ●" } else { "> 🥰" };
+            let role_color = if is_user { AI_USER } else if is_system { TEXT_MUTED } else { AI_ASSISTANT };
 
-            lines.push(Line::from(Span::styled(
-                format!("{}", role_label),
-                Style::default().fg(role_color).add_modifier(Modifier::BOLD),
-            )));
+            chat_lines.push(
+                Line::raw(prefix)
+                    .style(Style::default().fg(role_color).add_modifier(Modifier::BOLD)),
+            );
 
-            for line in content.lines() {
-                if is_system {
-                    lines.push(Line::from(Span::styled(
-                        format!(" {}", line),
-                        Style::default().fg(TEXT_MUTED),
-                    )));
-                } else {
-                    lines.push(Line::from(Span::styled(
-                        format!(" {}", line),
-                        Style::default(),
-                    )));
-                }
+            // Render content through markdown
+            let md_lines = markdown::render_markdown(content);
+            for md_line in md_lines {
+                let mut spans = vec![Span::raw("  ")];
+                spans.extend(md_line.spans.into_iter());
+                let mut line = Line::from(spans);
+                line.style = md_line.style;
+                chat_lines.push(line);
             }
-            lines.push(Line::from(Span::raw("")));
+            chat_lines.push(Line::raw(""));
         }
 
+        // Streaming indicator
         if s.chat_waiting {
-            lines.push(Line::from(Span::styled(
-                " Thinking...",
-                Style::default().fg(AI_WAITING),
-            )));
+            chat_lines.push(
+                Line::raw("> 🥰:")
+                    .style(Style::default().fg(AI_ASSISTANT).add_modifier(Modifier::BOLD)),
+            );
+            chat_lines.push(
+                Line::styled("  Thinking...", Style::default().fg(AI_WAITING)),
+            );
+            chat_lines.push(Line::raw(""));
         }
 
+        // Slice to visible area
+        let total_lines = chat_lines.len();
+        let max_start = total_lines.saturating_sub(chat_area.height as usize);
+        let start = max_start;
+        let end = (start + chat_area.height as usize).min(total_lines);
+        let visible_lines: Vec<Line<'static>> = chat_lines[start..end].to_vec();
+
         f.render_widget(
-            Paragraph::new(lines)
-                .block(block)
-                .wrap(Wrap { trim: false }),
-            area,
+            Paragraph::new(Text::from(visible_lines))
+                .wrap(Wrap { trim: false })
+                .style(Style::default()),
+            chat_area,
         );
-    }
 
-    fn render_chat_input(&self, f: &mut Frame, area: Rect, s: &AppState) {
-        let block = Block::default()
+        // ── Status bar ──
+        let status_text: String = if s.chat_waiting {
+            " Teshi is thinking...".into()
+        } else {
+            String::new()
+        };
+        if !status_text.is_empty() {
+            f.render_widget(
+                Paragraph::new(Text::from(Line::raw(status_text).style(Style::default().fg(Color::Yellow)))),
+                status_area,
+            );
+        }
+
+        // ── Input bar ──
+        let input_border_style = Style::default().fg(Color::DarkGray);
+        let input_block = Block::default()
             .borders(Borders::ALL)
-            .padding(Padding::uniform(1))
-            .title(" Input ")
-            .border_style(Style::default().fg(HEADER_CYAN));
+            .border_style(input_border_style);
+        let input_inner = input_block.inner(input_area);
+        f.render_widget(input_block, input_area);
 
-        let input_display = if s.chat_input.is_empty() {
-            " Type a message and press Enter...".to_string()
+        let input_display: Text<'static> = if s.chat_input.is_empty() {
+            Text::raw("Type your message...")
         } else {
-            format!(" {}", s.chat_input)
+            let lines: Vec<Line<'static>> = s.chat_input
+                .lines()
+                .map(|l| Line::from(Span::raw(l.to_string())))
+                .collect();
+            Text::from(lines)
         };
-
-        let input_style = if s.chat_input.is_empty() {
-            Style::default().fg(TEXT_MUTED)
-        } else {
-            Style::default().fg(TEXT_MAIN)
-        };
-
         f.render_widget(
-            Paragraph::new(Line::from(Span::styled(input_display, input_style))).block(block),
-            area,
+            Paragraph::new(input_display).style(if s.chat_waiting {
+                Style::default().fg(Color::DarkGray)
+            } else {
+                Style::default()
+            }),
+            input_inner,
         );
     }
 

@@ -14,6 +14,7 @@ mod demo;
 mod diff;
 mod gherkin;
 mod llm;
+mod markdown;
 mod mindmap;
 mod network;
 mod step_index;
