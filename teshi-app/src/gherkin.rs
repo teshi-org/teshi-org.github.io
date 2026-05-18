@@ -32,6 +32,7 @@ pub struct BddFeature {
     pub background: Option<BddBackground>,
     pub scenarios: Vec<BddScenario>,
     pub line_count: usize,
+    pub raw_content: String,
 }
 
 /// `Background:` block — shared steps prepended to every scenario.
@@ -205,6 +206,7 @@ pub fn parse_feature(content: &str, file_path: PathBuf) -> BddFeature {
         background,
         scenarios,
         line_count,
+        raw_content: content.to_string(),
     }
 }
 

@@ -84,6 +84,13 @@ pub struct AppState {
     pub clickable_regions: Vec<ClickableRegion>,
     // MindMap tree panel area for mouse hit-testing
     pub tree_panel_rect: Option<Rect>,
+    // MindMap preview panel
+    pub mindmap_location_selection: std::collections::HashMap<String, usize>,
+    pub preview_lines: Vec<String>,
+    pub preview_title: String,
+    pub preview_cursor_row: usize,
+    pub preview_scroll_row: usize,
+    pub preview_panel_rect: Option<Rect>,
     // Accumulated scroll wheel delta (consumed each frame)
     pub scroll_delta: f64,
 }
@@ -137,6 +144,12 @@ impl AppState {
             show_help: false,
             clickable_regions: Vec::new(),
             tree_panel_rect: None,
+            mindmap_location_selection: std::collections::HashMap::new(),
+            preview_lines: Vec::new(),
+            preview_title: String::new(),
+            preview_cursor_row: 0,
+            preview_scroll_row: 0,
+            preview_panel_rect: None,
             scroll_delta: 0.0,
         }
     }
@@ -166,6 +179,8 @@ impl AppState {
         self.explore_selected_scenario = 0;
         self.explore_selected_step = 0;
         self.show_raw_feature = false;
+        self.mindmap_location_selection.clear();
+        self.rebuild_preview();
     }
 
     /// Simulate running all scenarios with random pass/fail results.
@@ -236,6 +251,130 @@ impl AppState {
         if let Some(ref id) = self.mindmap_selected_id.clone() {
             self.mindmap_index.apply_highlight_categories(id);
         }
+        self.rebuild_preview();
+    }
+
+    /// Build preview lines from selected tree node's source location.
+    pub fn rebuild_preview(&mut self) {
+        let Some(loc) = mindmap::selected_node_location(
+            &self.tree_state,
+            &self.mindmap_index,
+            &self.mindmap_location_selection,
+        ) else {
+            self.preview_lines.clear();
+            self.preview_title = String::new();
+            self.preview_cursor_row = 0;
+            self.preview_scroll_row = 0;
+            return;
+        };
+
+        let Some(feature) = self.project.features.get(loc.feature_idx) else {
+            self.preview_lines.clear();
+            return;
+        };
+
+        let content = &feature.raw_content;
+        let all_lines: Vec<&str> = content.lines().collect();
+        let total = all_lines.len().max(1);
+
+        let (start, end, title) = match loc.context {
+            mindmap::LocationContext::Scenario(sci) => {
+                let Some(scenario) = feature.scenarios.get(sci) else {
+                    self.preview_lines.clear();
+                    return;
+                };
+                let mut start = scenario.line_number.max(1);
+                // Include contiguous @tag lines above the scenario
+                let mut row = start.saturating_sub(1);
+                while row > 0 {
+                    let prev_line = all_lines.get(row - 1).copied().unwrap_or("");
+                    let trimmed = prev_line.trim();
+                    if !trimmed.is_empty() && trimmed.starts_with('@') {
+                        start = row;
+                        row = row.saturating_sub(1);
+                    } else {
+                        break;
+                    }
+                }
+
+                let mut end = total;
+                if let Some(next) = feature.scenarios.get(sci + 1) {
+                    end = next.line_number.saturating_sub(1).max(1);
+                }
+                if end < start {
+                    end = start;
+                }
+
+                let title = match scenario.kind {
+                    gherkin::ScenarioKind::Scenario => {
+                        format!("Scenario: {}", scenario.name)
+                    }
+                    gherkin::ScenarioKind::ScenarioOutline => {
+                        format!("Scenario Outline: {}", scenario.name)
+                    }
+                };
+                (start, end, title)
+            }
+            mindmap::LocationContext::Background => {
+                let Some(bg) = feature.background.as_ref() else {
+                    self.preview_lines.clear();
+                    return;
+                };
+                let start = bg.line_number.max(1);
+                let mut end = total;
+                if let Some(first) = feature.scenarios.first() {
+                    end = first.line_number.saturating_sub(1).max(1);
+                }
+                if end < start {
+                    end = start;
+                }
+                (start, end, "Background".to_string())
+            }
+        };
+
+        if start == 0 || end == 0 || start > total || end > total {
+            self.preview_lines.clear();
+            return;
+        }
+
+        let start = start.min(total);
+        let end = end.min(total).max(start);
+
+        let mut lines: Vec<String> = Vec::with_capacity(end - start + 1);
+        for row in (start - 1)..end {
+            if let Some(l) = all_lines.get(row) {
+                lines.push(l.to_string());
+            }
+        }
+
+        let rel_cursor = loc
+            .line_number
+            .saturating_sub(start)
+            .min(lines.len().saturating_sub(1));
+
+        let mut title = title;
+
+        // Append location index for multi-location nodes
+        if let Some(id) = mindmap::selected_node_id(&self.tree_state) {
+            if let Some(locations) = self.mindmap_index.locations_for(id) {
+                let count = locations.len();
+                if count > 1 {
+                    let idx = self.mindmap_location_selection.get(id).copied().unwrap_or(0);
+                    if let Some(col) = title.find(':') {
+                        let base = &title[..col];
+                        let rest = &title[col..];
+                        title = format!("{} ({}/{}){}", base, idx + 1, count, rest);
+                    } else {
+                        title = format!("({}/{}) {}", idx + 1, count, title);
+                    }
+                }
+            }
+        }
+
+        self.preview_lines = lines;
+        self.preview_title = title;
+        self.preview_cursor_row = rel_cursor;
+        self.preview_scroll_row = 0;
     }
 
     /// Find a scenario by name across all features and set its run status.
@@ -342,6 +481,7 @@ impl AppState {
                         }
                         self.mindmap_selected_id = mindmap::selected_node_id(&self.tree_state)
                             .map(|s| s.to_string());
+                        self.rebuild_preview();
                         return;
                     }
                 }

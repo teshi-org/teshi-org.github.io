@@ -9,7 +9,7 @@ use ratzilla::ratatui::text::{Line, Span};
 use ratzilla::ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Tabs, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use crate::{AppState, ColumnFocus, gherkin, mindmap};
+use crate::{AppState, ColumnFocus, gherkin};
 
 const TAB_NAMES: &[&str] = &[" Explore [1] ", " MindMap [2] ", " AI [3] "];
 
@@ -608,7 +608,14 @@ impl AppUi {
             title.push_str("[highlighted] ");
         }
 
-        let block = Block::default()
+        // Horizontal split: tree 55% | preview 45%
+        let horiz = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+            .split(area);
+
+        // ── Left: tree panel ──
+        let tree_block = Block::default()
             .borders(Borders::ALL)
             .padding(Padding::uniform(1))
             .title(title)
@@ -620,78 +627,285 @@ impl AppUi {
                     "  (no features loaded for mindmap)",
                     Style::default().fg(TEXT_MUTED),
                 )))
-                .block(block),
-                area,
+                .block(tree_block),
+                horiz[0],
             );
+        } else {
+            let hl = Style::default()
+                .fg(SEL_FOCUSED_FG)
+                .add_modifier(Modifier::BOLD);
+
+            let tree = match Tree::new(&s.mindmap_index.items) {
+                Ok(t) => t.block(tree_block).highlight_style(hl),
+                Err(_) => {
+                    f.render_widget(
+                        Paragraph::new(Line::from(Span::styled(
+                            "  (tree error)",
+                            Style::default().fg(TEXT_ERROR),
+                        )))
+                        .block(tree_block),
+                        horiz[0],
+                    );
+                    return;
+                }
+            };
+
+            // Store tree panel area for mouse hit-testing
+            s.tree_panel_rect = Some(horiz[0]);
+            s.clickable_regions.push(crate::ClickableRegion::Tree);
+
+            f.render_stateful_widget(tree, horiz[0], &mut s.tree_state);
+        }
+
+        // ── Right: preview panel ──
+        s.preview_panel_rect = Some(horiz[1]);
+        self.render_mindmap_preview(f, horiz[1], s);
+    }
+
+    /// Renders the scenario preview panel in the MindMap tab (right side).
+    fn render_mindmap_preview(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
+        if area.width < 10 || area.height < 3 {
             return;
         }
 
-        let hl = Style::default()
-            .fg(SEL_FOCUSED_FG)
-            .add_modifier(Modifier::BOLD);
-
-        let tree = match Tree::new(&s.mindmap_index.items) {
-            Ok(t) => t.block(block).highlight_style(hl),
-            Err(_) => {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        "  (tree error)",
-                        Style::default().fg(TEXT_ERROR),
-                    )))
-                    .block(block),
-                    area,
-                );
-                return;
-            }
+        let title = if s.preview_title.is_empty() {
+            "Preview"
+        } else {
+            s.preview_title.as_str()
         };
 
-        let vert = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(5), Constraint::Length(6)])
-            .split(area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .padding(Padding::uniform(1))
+            .title(title)
+            .title_style(Style::default().fg(HEADER_CYAN));
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+        if inner.width == 0 || inner.height == 0 {
+            return;
+        }
+        f.render_widget(Clear, inner);
 
-        // Store tree panel area for mouse hit-testing
-        s.tree_panel_rect = Some(vert[0]);
-        s.clickable_regions.push(crate::ClickableRegion::Tree);
+        // Paint full-width spaces to avoid stale pixels
+        let buf = f.buffer_mut();
+        for i in 0..inner.height {
+            let y = inner.y.saturating_add(i);
+            if y >= inner.bottom() {
+                break;
+            }
+            buf.set_string(
+                inner.x,
+                y,
+                " ".repeat(inner.width as usize),
+                Style::default(),
+            );
+        }
 
-        f.render_stateful_widget(tree, vert[0], &mut s.tree_state);
-        self.mindmap_context(f, vert[1], s);
+        let cursor_row = s.preview_cursor_row;
+        let visible_lines = inner.height as usize;
+        let line_count = s.preview_lines.len();
+
+        // Auto-scroll: center cursor row
+        let max_scroll = line_count.saturating_sub(visible_lines);
+        let actual_scroll = if cursor_row < visible_lines / 2 || line_count <= visible_lines {
+            0
+        } else {
+            (cursor_row - visible_lines / 2).min(max_scroll)
+        };
+        s.preview_scroll_row = actual_scroll;
+
+        let cursor_style = Style::default().fg(HEADER_CYAN);
+        let mut in_doc_string = false;
+        let mut last_major: Option<Color> = None;
+
+        for i in 0..visible_lines {
+            let buf_row = actual_scroll + i;
+            let y = inner.y.saturating_add(i as u16);
+            if y >= inner.bottom() {
+                break;
+            }
+
+            let line_str = if buf_row < line_count {
+                s.preview_lines[buf_row].as_str()
+            } else {
+                buf.set_string(
+                    inner.x,
+                    y,
+                    " ".repeat(inner.width as usize),
+                    Style::default(),
+                );
+                continue;
+            };
+
+            let is_cursor = buf_row == cursor_row;
+            let spans = self.highlight_gherkin_line(
+                line_str,
+                &mut in_doc_string,
+                &mut last_major,
+            );
+
+            let styled_line = if is_cursor {
+                Line::from(Span::styled(line_str.to_string(), cursor_style))
+            } else {
+                Line::from(spans)
+            };
+
+            let styled_line = self.truncate_or_pad(styled_line, inner.width);
+            buf.set_line(inner.x, y, &styled_line, inner.width);
+        }
     }
 
-    fn mindmap_context(&self, f: &mut Frame, area: Rect, s: &AppState) {
-        let ctx = s
-            .mindmap_selected_id
-            .as_ref()
-            .and_then(|id| mindmap::selected_node_context(&s.tree_state, &s.mindmap_index));
-        let b = Block::default()
-            .borders(Borders::TOP)
-            .padding(Padding::horizontal(1))
-            .title(" Node ")
-            .border_style(Style::default().fg(TEXT_MUTED));
-        let lines = match ctx {
-            Some(c) => vec![
-                Line::from(Span::styled(
-                    format!(" Step: {}", c.step_text),
-                    Style::default(),
-                )),
-                Line::from(Span::styled(
-                    format!(" Locations: {}", c.location_count),
-                    Style::default().fg(TEXT_MUTED),
-                )),
-                Line::from(Span::styled(
-                    format!(" Path: {}", c.path_labels.join(" → ")),
-                    Style::default().fg(TEXT_MUTED),
-                )),
-            ],
-            None => vec![Line::from(Span::styled(
-                "  (select a node)",
+    /// Apply inline Gherkin syntax coloring to a single line.
+    fn highlight_gherkin_line(
+        &self,
+        line: &str,
+        in_doc_string: &mut bool,
+        last_major: &mut Option<Color>,
+    ) -> Vec<Span<'static>> {
+        let trimmed = line.trim_start();
+        let leading_ws = line.len().saturating_sub(trimmed.len());
+
+        // Doc string markers
+        if trimmed.starts_with("\"\"\"") || trimmed.starts_with("```") {
+            *in_doc_string = !*in_doc_string;
+            let ws: String = line.chars().take(leading_ws).collect();
+            return vec![
+                Span::raw(ws),
+                Span::styled(trimmed.to_string(), Style::default().fg(TEXT_MUTED)),
+            ];
+        }
+        if *in_doc_string {
+            return vec![Span::styled(
+                line.to_string(),
                 Style::default().fg(TEXT_MUTED),
-            ))],
-        };
-        f.render_widget(
-            Paragraph::new(lines).block(b).wrap(Wrap { trim: false }),
-            area,
-        );
+            )];
+        }
+
+        // Comment
+        if trimmed.starts_with('#') {
+            return vec![Span::styled(
+                line.to_string(),
+                Style::default().fg(TEXT_MUTED),
+            )];
+        }
+
+        // Data table
+        if trimmed.starts_with('|') {
+            return vec![Span::styled(
+                line.to_string(),
+                Style::default().fg(TEXT_MUTED),
+            )];
+        }
+
+        // Tags
+        if trimmed.starts_with('@') {
+            let ws: String = line.chars().take(leading_ws).collect();
+            let mut spans = vec![Span::raw(ws)];
+            for part in trimmed.split_whitespace() {
+                if part.starts_with('@') {
+                    spans.push(Span::styled(
+                        part.to_string(),
+                        Style::default().fg(Color::Rgb(226, 183, 20)),
+                    ));
+                } else {
+                    spans.push(Span::raw(part.to_string()));
+                }
+                spans.push(Span::raw(" "));
+            }
+            return spans;
+        }
+
+        // Structural headers
+        let header_kws = [
+            "Feature:",
+            "Scenario:",
+            "Scenario Outline:",
+            "Background:",
+            "Examples:",
+        ];
+        for kw in &header_kws {
+            if let Some(rest) = trimmed.strip_prefix(kw) {
+                let ws: String = line.chars().take(leading_ws).collect();
+                *last_major = None;
+                return vec![
+                    Span::raw(ws),
+                    Span::styled(
+                        kw.to_string(),
+                        Style::default()
+                            .fg(HEADER_CYAN)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(rest.to_string()),
+                ];
+            }
+        }
+
+        // Step keywords
+        use gherkin::StepKeywordType;
+        let step_kws: &[(StepKeywordType, &str, Color)] = &[
+            (StepKeywordType::Given, "Given", KWD_GIVEN),
+            (StepKeywordType::When, "When", KWD_WHEN),
+            (StepKeywordType::Then, "Then", KWD_THEN),
+            (StepKeywordType::And, "And", KWD_AND_BUT),
+            (StepKeywordType::But, "But", KWD_AND_BUT),
+        ];
+        for &(_, kw_text, kw_color) in step_kws {
+            if let Some(rest) = trimmed.strip_prefix(kw_text) {
+                if !rest.is_empty() && !rest.starts_with(' ') {
+                    continue;
+                }
+                let ws: String = line.chars().take(leading_ws).collect();
+                let color = if kw_text == "And" || kw_text == "But" {
+                    last_major.unwrap_or(kw_color)
+                } else {
+                    *last_major = Some(kw_color);
+                    kw_color
+                };
+                return vec![
+                    Span::raw(ws),
+                    Span::styled(kw_text.to_string(), Style::default().fg(color)),
+                    Span::raw(rest.to_string()),
+                ];
+            }
+        }
+
+        // Fallback: single plain span
+        vec![Span::raw(line.to_string())]
+    }
+
+    /// Truncate or pad a Line to exactly `width` columns.
+    fn truncate_or_pad(&self, line: Line<'static>, width: u16) -> Line<'static> {
+        let w = width as usize;
+        let line_w = line.width();
+        if line_w > w {
+            let mut budget = w;
+            let mut out = Vec::new();
+            for span in line.spans {
+                if budget == 0 {
+                    break;
+                }
+                let s = span.content.to_string();
+                let sw = unicode_width::UnicodeWidthStr::width(s.as_str());
+                if sw <= budget {
+                    out.push(span);
+                    budget -= sw;
+                } else {
+                    let clipped: String = s.chars().take(budget).collect();
+                    out.push(Span::styled(clipped, span.style));
+                    budget = 0;
+                }
+            }
+            Line::from(out)
+        } else if line_w < w {
+            let mut line = line;
+            line.push_span(Span::styled(
+                " ".repeat(w - line_w),
+                Style::default(),
+            ));
+            line
+        } else {
+            line
+        }
     }
 
     // ── AI Chat tab ──

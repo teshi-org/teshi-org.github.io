@@ -71,6 +71,23 @@ pub fn selected_node_context(
     })
 }
 
+/// Returns the concrete source location for the currently selected tree node,
+/// using the per-node location selection index from `location_selection`.
+pub fn selected_node_location(
+    state: &TreeState<String>,
+    index: &MindMapIndex,
+    location_selection: &std::collections::HashMap<String, usize>,
+) -> Option<NodeLocation> {
+    let id = selected_node_id(state)?;
+    let locations = index.locations_for(id)?;
+    if locations.is_empty() {
+        return None;
+    }
+    let entry = location_selection.get(id).copied().unwrap_or(0);
+    let idx = entry.min(locations.len() - 1);
+    locations.get(idx).copied()
+}
+
 /// Result of a closest-node lookup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeMatch {
