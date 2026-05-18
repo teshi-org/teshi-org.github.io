@@ -1011,44 +1011,35 @@ impl AppUi {
 
     /// Render the 1-line status footer, matching the desktop TUI's per-tab footers.
     /// The row starts with a "─" separator character followed by the status text.
+    /// Styled key-hint pill matching the desktop's footer_pill style.
+    fn footer_pill(&self, label: &'static str) -> Span<'static> {
+        Span::styled(label, self.selected_style(false))
+    }
+
     fn render_footer(&self, f: &mut Frame, area: Rect, s: &AppState) {
         if area.width == 0 || area.height == 0 {
             return;
         }
         let sep = Span::styled("─", Style::default().fg(TEXT_MUTED));
-        let (text, style) = match s.active_tab {
-            0 => self.explore_footer_text(s),
-            1 => (self.mindmap_footer_text(), Style::default().fg(TEXT_MUTED)),
-            2 => (self.ai_footer_text(s), Style::default().fg(TEXT_MUTED)),
-            _ => (String::new(), Style::default()),
-        };
-        let full = format!(" {}", text);
-        let max_chars = area.width.saturating_sub(1) as usize;
-        let clipped: String = if full.chars().count() > max_chars {
-            let keep = max_chars.saturating_sub(3);
-            if keep > 0 {
-                let truncated: String = full.chars().take(keep).collect();
-                format!("{}...", truncated)
-            } else {
-                String::new()
-            }
-        } else {
-            full
-        };
-        f.render_widget(
-            Paragraph::new(Line::from(vec![sep, Span::styled(clipped, style)])),
-            area,
-        );
+        let mut pills = vec![sep, Span::raw(" ")];
+        pills.extend(match s.active_tab {
+            0 => self.explore_footer_hints(s),
+            1 => self.mindmap_footer_hints(),
+            2 => self.ai_footer_hints(s),
+            _ => vec![],
+        });
+        f.render_widget(Paragraph::new(Line::from(pills)), area);
     }
 
-    /// Build the explore footer line: feature/scenario name + test results.
-    fn explore_footer_text(&self, s: &AppState) -> (String, Style) {
+    /// Per-tab key-hint pills for the Explore tab.
+    fn explore_footer_hints(&self, s: &AppState) -> Vec<Span<'static>> {
         if s.show_raw_feature {
-            return (
-                " [Enter/Back] exit raw view  [1-3] tabs".into(),
-                Style::default().fg(TEXT_MUTED),
-            );
+            return vec![
+                self.footer_pill(" Enter/Back "),
+                self.footer_pill(" 1-3 tabs "),
+            ];
         }
+        // Left side: feature name + scenario name
         let feat_name = s
             .project
             .features
@@ -1063,40 +1054,58 @@ impl AppUi {
             .and_then(|f| f.scenarios.get(s.explore_selected_scenario))
             .map(|s| s.name.as_str())
             .unwrap_or("-");
-        let left = format!("{}  {}", feat_name, scen_name);
+        let left = format!(" {}  {} ", feat_name, scen_name);
+        let mut hints = vec![Span::styled(left, Style::default().fg(TEXT_MUTED))];
+
+        // Right side: key hints
+        hints.push(self.footer_pill(" Tab "));
+        hints.push(self.footer_pill(" ↑↓ "));
+        hints.push(self.footer_pill(" Enter "));
+        hints.push(self.footer_pill(" ? "));
+
+        // Run results if available
         let total = s
             .project
             .features
             .get(s.explore_selected_feature)
             .map(|f| f.scenarios.len())
             .unwrap_or(0);
-        let passed = s
-            .scenario_status
-            .values()
-            .filter(|v| *v == "passed")
-            .count();
-        let failed = s
-            .scenario_status
-            .values()
-            .filter(|v| *v == "failed")
-            .count();
-        let right = if total > 0 {
-            format!("  {}/{} passed, {} failed", passed, total, failed)
-        } else {
-            String::new()
-        };
-        (format!("{left}{right}"), Style::default().fg(TEXT_MUTED))
+        if total > 0 {
+            let passed = s
+                .scenario_status
+                .values()
+                .filter(|v| *v == "passed")
+                .count();
+            let failed = s
+                .scenario_status
+                .values()
+                .filter(|v| *v == "failed")
+                .count();
+            let stats = format!(" {}/{} passed, {} failed ", passed, total, failed);
+            hints.push(Span::styled(stats, Style::default().fg(TEXT_MUTED)));
+        }
+        hints
     }
 
-    fn mindmap_footer_text(&self) -> String {
-        " [↑↓] select  [←] collapse  [→] expand  [Space] toggle  [1-3] tabs".into()
+    fn mindmap_footer_hints(&self) -> Vec<Span<'static>> {
+        vec![
+            self.footer_pill(" ↑↓ select "),
+            self.footer_pill(" ←→ expand "),
+            self.footer_pill(" Space toggle "),
+        ]
     }
 
-    fn ai_footer_text(&self, s: &AppState) -> String {
+    fn ai_footer_hints(&self, s: &AppState) -> Vec<Span<'static>> {
         if s.chat_waiting {
-            " Thinking...".into()
+            vec![Span::styled(
+                " Thinking...",
+                Style::default().fg(AI_WAITING),
+            )]
         } else {
-            " Type & press Enter to send  [Esc] clear input  [1-3] tabs".into()
+            vec![
+                self.footer_pill(" Enter send "),
+                self.footer_pill(" Esc clear "),
+            ]
         }
     }
 }
