@@ -93,6 +93,9 @@ pub struct AppState {
     pub preview_panel_rect: Option<Rect>,
     // Accumulated scroll wheel delta (consumed each frame)
     pub scroll_delta: f64,
+    // Scenario location dropdown in preview panel
+    pub scenario_dropdown_open: bool,
+    pub scenario_dropdown_selection: usize,
 }
 
 impl AppState {
@@ -151,6 +154,8 @@ impl AppState {
             preview_scroll_row: 0,
             preview_panel_rect: None,
             scroll_delta: 0.0,
+            scenario_dropdown_open: false,
+            scenario_dropdown_selection: 0,
         }
     }
 
@@ -644,9 +649,61 @@ impl AppState {
                 self.show_raw_feature = false;
                 true
             }
-            KeyCode::Enter if self.active_tab == 1 => {
-                self.tree_state.toggle_selected();
-                self.sync_tree_selection();
+            KeyCode::Enter if self.active_tab == 1 && self.scenario_dropdown_open => {
+                // Select current dropdown item → jump to that location
+                if let Some(id) = mindmap::selected_node_id(&self.tree_state) {
+                    if let Some(locations) = self.mindmap_index.locations_for(id) {
+                        let idx = self
+                            .scenario_dropdown_selection
+                            .min(locations.len().saturating_sub(1));
+                        self.mindmap_location_selection
+                            .insert(id.to_string(), idx);
+                        self.scenario_dropdown_open = false;
+                        self.rebuild_preview();
+                    }
+                }
+                true
+            }
+            KeyCode::Esc if self.active_tab == 1 && self.scenario_dropdown_open => {
+                self.scenario_dropdown_open = false;
+                true
+            }
+            KeyCode::Up if self.active_tab == 1 && self.scenario_dropdown_open => {
+                self.scenario_dropdown_selection = self.scenario_dropdown_selection.saturating_sub(1);
+                true
+            }
+            KeyCode::Down if self.active_tab == 1 && self.scenario_dropdown_open => {
+                if let Some(id) = mindmap::selected_node_id(&self.tree_state) {
+                    if let Some(locations) = self.mindmap_index.locations_for(id) {
+                        let max = locations.len().saturating_sub(1);
+                        self.scenario_dropdown_selection = self.scenario_dropdown_selection.min(max);
+                        if self.scenario_dropdown_selection < max {
+                            self.scenario_dropdown_selection += 1;
+                        }
+                    }
+                }
+                true
+            }
+            KeyCode::Enter if self.active_tab == 1 && !self.scenario_dropdown_open => {
+                // If node has multiple locations, open dropdown; else toggle
+                if let Some(id) = mindmap::selected_node_id(&self.tree_state) {
+                    if let Some(locations) = self.mindmap_index.locations_for(id)
+                        && locations.len() > 1
+                    {
+                        self.scenario_dropdown_open = true;
+                        self.scenario_dropdown_selection = self
+                            .mindmap_location_selection
+                            .get(id)
+                            .copied()
+                            .unwrap_or(0);
+                    } else {
+                        self.tree_state.toggle_selected();
+                        self.sync_tree_selection();
+                    }
+                } else {
+                    self.tree_state.toggle_selected();
+                    self.sync_tree_selection();
+                }
                 true
             }
             KeyCode::Char(' ') if self.active_tab == 1 => {

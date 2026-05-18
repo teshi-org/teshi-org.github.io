@@ -5,11 +5,11 @@ use tui_tree_widget::Tree;
 use ratzilla::ratatui::Frame;
 use ratzilla::ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratzilla::ratatui::style::{Color, Modifier, Style};
-use ratzilla::ratatui::text::{Line, Span};
+use ratzilla::ratatui::text::{Line, Span, Text};
 use ratzilla::ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Tabs, Wrap};
 use unicode_width::UnicodeWidthStr;
 
-use crate::{AppState, ColumnFocus, gherkin};
+use crate::{AppState, ColumnFocus, gherkin, mindmap};
 
 const TAB_NAMES: &[&str] = &[" Explore [1] ", " MindMap [2] ", " AI [3] "];
 
@@ -701,6 +701,96 @@ impl AppUi {
             );
         }
 
+        // ── Scenario location dropdown (replaces content when open) ──
+        if s.scenario_dropdown_open
+            && let Some(id) = mindmap::selected_node_id(&s.tree_state)
+            && let Some(locations) = s.mindmap_index.locations_for(id)
+            && !locations.is_empty()
+        {
+            let count = locations.len();
+            let selection = s.scenario_dropdown_selection.min(count.saturating_sub(1));
+            let max_items = (inner.height as usize).saturating_sub(2).min(count);
+            let list_height = (max_items + 2).min(inner.height as usize) as u16;
+
+            let dropdown_area = Rect::new(inner.x, inner.y, inner.width, list_height.min(inner.height));
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title("Open Scenario")
+                .border_style(Style::default().fg(HEADER_CYAN));
+            let di = block.inner(dropdown_area);
+            f.render_widget(Clear, dropdown_area);
+            f.render_widget(block, dropdown_area);
+
+            let mut items: Vec<String> = Vec::with_capacity(count);
+            for loc in locations.iter().take(count) {
+                let feature_name = s
+                    .project
+                    .features
+                    .get(loc.feature_idx)
+                    .and_then(|f| f.file_path.file_stem())
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| format!("feature_{}", loc.feature_idx));
+                let label = match loc.context {
+                    mindmap::LocationContext::Scenario(sci) => {
+                        let scenario_name = s
+                            .project
+                            .features
+                            .get(loc.feature_idx)
+                            .and_then(|f| f.scenarios.get(sci))
+                            .map(|s| s.name.as_str())
+                            .unwrap_or("?");
+                        format!("{}: Scenario: {}", feature_name, scenario_name)
+                    }
+                    mindmap::LocationContext::Background => {
+                        format!("{}: Background", feature_name)
+                    }
+                };
+                items.push(label);
+            }
+
+            let visible_items = di.height as usize;
+            let scroll_start = selection.saturating_sub(visible_items.saturating_sub(1) / 2);
+            let scroll_end = (scroll_start + visible_items).min(items.len());
+            let mut dd_lines: Vec<Line<'static>> = Vec::with_capacity(visible_items);
+
+            for (i, item) in items[scroll_start..scroll_end].iter().enumerate() {
+                let idx = scroll_start + i;
+                let is_selected = idx == selection;
+                let prefix = if is_selected { "▸ " } else { "  " };
+                let style = if is_selected {
+                    Style::default()
+                        .fg(SEL_FOCUSED_FG)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(TEXT_MAIN)
+                };
+                let text = if item.len() > di.width.saturating_sub(2) as usize {
+                    let take = di.width.saturating_sub(5) as usize;
+                    let truncated: String = item.chars().take(take).collect();
+                    format!("{}", truncated)
+                } else {
+                    item.to_string()
+                };
+                dd_lines.push(Line::styled(format!("{}{}", prefix, text), style));
+            }
+            f.render_widget(Paragraph::new(Text::from(dd_lines)), di);
+
+            // Hint line below dropdown
+            if dropdown_area.y + dropdown_area.height < inner.y + inner.height {
+                let hint_y = dropdown_area.y + dropdown_area.height;
+                let hint_line = Line::styled(
+                    " ↑↓ select · Enter go · Esc close ",
+                    Style::default().fg(TEXT_MUTED),
+                );
+                f.render_widget(
+                    Paragraph::new(hint_line),
+                    Rect::new(inner.x, hint_y, inner.width, 1),
+                );
+            }
+            return;
+        }
+
+        // ── Normal preview content ──
         let cursor_row = s.preview_cursor_row;
         let visible_lines = inner.height as usize;
         let line_count = s.preview_lines.len();
