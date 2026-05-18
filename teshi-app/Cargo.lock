@@ -1148,6 +1148,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tui-tree-widget",
+ "unicode-width",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-logger",

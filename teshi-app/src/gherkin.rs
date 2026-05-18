@@ -60,8 +60,10 @@ pub struct BddScenario {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct BddStep {
-    /// Leading keyword: `Given`, `When`, `Then`, `And`, or `But`.
+    /// Leading keyword text as written in the source (e.g. "Given").
     pub keyword: String,
+    /// Normalised keyword type, independent of language.
+    pub keyword_type: StepKeywordType,
     /// Body text after the keyword (trimmed of the leading space).
     pub text: String,
     /// 1-based line number.
@@ -84,6 +86,16 @@ pub struct ExamplesTable {
 pub enum ScenarioKind {
     Scenario,
     ScenarioOutline,
+}
+
+/// Normalised step keyword type, independent of language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StepKeywordType {
+    Given,
+    When,
+    Then,
+    And,
+    But,
 }
 
 // ── Parser ───────────────────────────────────────────────────────────────────
@@ -274,8 +286,17 @@ fn try_parse_step(trimmed: &str, line_number: usize) -> Option<BddStep> {
             && (rest.is_empty() || rest.starts_with(' '))
         {
             let text = rest.strip_prefix(' ').unwrap_or(rest).to_string();
+            let keyword_type = match *kw {
+                "Given" => StepKeywordType::Given,
+                "When" => StepKeywordType::When,
+                "Then" => StepKeywordType::Then,
+                "And" => StepKeywordType::And,
+                "But" => StepKeywordType::But,
+                _ => unreachable!(),
+            };
             return Some(BddStep {
                 keyword: kw.to_string(),
+                keyword_type,
                 text,
                 line_number,
             });
@@ -459,6 +480,7 @@ Feature: User login
         let f = parse_feature(SAMPLE, PathBuf::from("login.feature"));
         let s = &f.scenarios[0].steps[0];
         assert_eq!(s.keyword, "When");
+        assert_eq!(s.keyword_type, StepKeywordType::When);
         assert_eq!(s.text, "I enter username \"alice\"");
         assert!(s.line_number > 0);
     }

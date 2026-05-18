@@ -7,6 +7,7 @@ use ratzilla::ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratzilla::ratatui::style::{Color, Modifier, Style};
 use ratzilla::ratatui::text::{Line, Span};
 use ratzilla::ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Tabs, Wrap};
+use unicode_width::UnicodeWidthStr;
 
 use crate::{AppState, ColumnFocus, gherkin, mindmap};
 
@@ -390,89 +391,127 @@ impl AppUi {
             .title(" Steps ")
             .title_style(self.block_title_style(s.explore_focus == ColumnFocus::Step));
         let mut lines: Vec<Line> = Vec::new();
-        if let Some(feat) = s.selected_feature() {
-            if let Some(bg) = &feat.background {
+
+        let feature = s.selected_feature();
+        let scenario = s.selected_scenario();
+        let background_steps = feature
+            .and_then(|f| f.background.as_ref())
+            .map(|bg| bg.steps.as_slice())
+            .unwrap_or(&[]);
+        let scenario_steps = scenario.map(|s| s.steps.as_slice()).unwrap_or(&[]);
+        let is_focused = s.explore_focus == ColumnFocus::Step;
+        let highlight_style = self.selected_style(is_focused);
+
+        if background_steps.is_empty() && scenario_steps.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "  (no steps)",
+                Style::default().fg(TEXT_MUTED),
+            )));
+        } else {
+            let mut last_major: Option<Color> = None;
+
+            // ── Background steps ──
+            if !background_steps.is_empty() {
                 lines.push(Line::from(Span::styled(
                     " Background:",
-                    Style::default().fg(TEXT_MUTED).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(TEXT_MUTED)
+                        .add_modifier(Modifier::BOLD),
                 )));
-                for step in &bg.steps {
-                    lines.push(self.sl(step));
+                for step in background_steps {
+                    let kw_color =
+                        self.keyword_color(step.keyword_type, &mut last_major);
+                    lines.push(Line::from(vec![
+                        Span::styled(
+                            format!(" {:>6}", step.keyword),
+                            Style::default().fg(kw_color),
+                        ),
+                        Span::styled(
+                            format!(" {}", step.text),
+                            Style::default().fg(TEXT_MUTED),
+                        ),
+                    ]));
                 }
+                lines.push(Line::raw(""));
             }
-            if let Some(sc) = s.selected_scenario() {
+
+            // ── Scenario tags ──
+            if let Some(sc) = scenario {
                 if !sc.tags.is_empty() {
                     lines.push(Line::from(Span::styled(
                         format!("  {}", sc.tags.join(" ")),
                         Style::default().fg(TEXT_MUTED),
                     )));
                 }
-                for step in &sc.steps {
-                    lines.push(self.sl(step));
-                }
-                for ex in &sc.examples {
-                    lines.push(Line::from(Span::raw("")));
+            }
+
+            // ── Scenario steps ──
+            last_major = None; // reset for scenario scope
+            for (i, step) in scenario_steps.iter().enumerate() {
+                let kw_color =
+                    self.keyword_color(step.keyword_type, &mut last_major);
+                let is_selected = i == s.explore_selected_step;
+                let body_span = if is_selected {
+                    Span::styled(format!(" {}", step.text), highlight_style)
+                } else {
+                    Span::raw(format!(" {}", step.text))
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!(" {:>6}", step.keyword),
+                        Style::default().fg(kw_color),
+                    ),
+                    body_span,
+                ]));
+            }
+
+            // ── Examples tables ──
+            if let Some(sc) = scenario {
+                for table in &sc.examples {
+                    lines.push(Line::raw(""));
                     lines.push(Line::from(Span::styled(
                         " Examples:",
                         Style::default().fg(HEADER_CYAN),
                     )));
-                    if !ex.headers.is_empty() {
-                        let h = ex
-                            .headers
-                            .iter()
-                            .map(|h| format!("| {}", h))
-                            .collect::<Vec<_>>()
-                            .join(" ");
+                    for row in render_examples_table_lines(&table.headers, &table.rows) {
                         lines.push(Line::from(Span::styled(
-                            format!("  {}", h),
-                            Style::default().fg(TEXT_MUTED),
-                        )));
-                    }
-                    for row in &ex.rows {
-                        let r = row
-                            .iter()
-                            .map(|c| format!("| {}", c))
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        lines.push(Line::from(Span::styled(
-                            format!("  {}", r),
+                            format!("  {}", row),
                             Style::default().fg(TEXT_MUTED),
                         )));
                     }
                 }
             }
-            if lines.is_empty() {
-                lines.push(Line::from(Span::styled(
-                    "  (no steps)",
-                    Style::default().fg(TEXT_MUTED),
-                )));
-            }
-        } else {
-            lines.push(Line::from(Span::styled(
-                "  (no feature selected)",
-                Style::default().fg(TEXT_MUTED),
-            )));
         }
+
         f.render_widget(
             Paragraph::new(lines).block(b).wrap(Wrap { trim: false }),
             area,
         );
     }
 
-    /// Step line with keyword coloring matching the desktop TUI
-    fn sl(&self, step: &gherkin::BddStep) -> Line<'static> {
-        let kwc = match step.keyword.as_str() {
-            "Given" => KWD_GIVEN, // Color::Blue in desktop TUI
-            "When" => KWD_WHEN,   // Color::Yellow
-            "Then" => KWD_THEN,   // Color::Green
-            "And" => KWD_AND_BUT, // Color::Gray
-            "But" => KWD_AND_BUT, // Color::Gray
-            _ => TEXT_MAIN,
-        };
-        Line::from(vec![
-            Span::styled(format!(" {} ", step.keyword), Style::default().fg(kwc)),
-            Span::styled(step.text.clone(), Style::default()),
-        ])
+    /// Look up keyword colour and update `last_major` so And/But inherit the
+    /// preceding Given/When/Then colour.
+    fn keyword_color(
+        &self,
+        kw_type: gherkin::StepKeywordType,
+        last_major: &mut Option<Color>,
+    ) -> Color {
+        match kw_type {
+            gherkin::StepKeywordType::Given => {
+                *last_major = Some(KWD_GIVEN);
+                KWD_GIVEN
+            }
+            gherkin::StepKeywordType::When => {
+                *last_major = Some(KWD_WHEN);
+                KWD_WHEN
+            }
+            gherkin::StepKeywordType::Then => {
+                *last_major = Some(KWD_THEN);
+                KWD_THEN
+            }
+            gherkin::StepKeywordType::And => last_major.unwrap_or(KWD_AND_BUT),
+            gherkin::StepKeywordType::But => last_major.unwrap_or(KWD_AND_BUT),
+        }
     }
 
     // ── MindMap tab ──
@@ -761,4 +800,42 @@ impl AppUi {
             " Type & press Enter to send  [Esc] clear input  [1-3] tabs".into()
         }
     }
+}
+
+/// Renders an Examples table with aligned column widths (port from desktop).
+fn render_examples_table_lines(headers: &[String], rows: &[Vec<String>]) -> Vec<String> {
+    if headers.is_empty() {
+        return Vec::new();
+    }
+    let mut widths: Vec<usize> = headers
+        .iter()
+        .map(|h| UnicodeWidthStr::width(h.as_str()))
+        .collect();
+    for row in rows {
+        for (i, cell) in row.iter().enumerate() {
+            if let Some(width) = widths.get_mut(i) {
+                *width = (*width).max(UnicodeWidthStr::width(cell.as_str()));
+            }
+        }
+    }
+    let format_row = |cells: &[String]| {
+        let mut out = String::from("|");
+        for (i, width) in widths.iter().enumerate() {
+            let cell = cells.get(i).map_or("", String::as_str);
+            let cell_w = UnicodeWidthStr::width(cell);
+            let pad = width.saturating_sub(cell_w);
+            out.push(' ');
+            out.push_str(cell);
+            out.push_str(&" ".repeat(pad));
+            out.push(' ');
+            out.push('|');
+        }
+        out
+    };
+    let mut out = Vec::with_capacity(rows.len() + 2);
+    out.push(format_row(headers));
+    for row in rows {
+        out.push(format_row(row));
+    }
+    out
 }
