@@ -266,7 +266,14 @@ img { display: block; max-width: 100%; }
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {
-  .showcase-frame { height: 400px; }
+  .showcase {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .showcase-frame {
+    width: 640px;
+    height: 400px;
+  }
 
   .features-grid { grid-template-columns: 1fr; }
 
