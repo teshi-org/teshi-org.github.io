@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use ratzilla::event::{KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use ratzilla::ratatui::Terminal;
+use ratzilla::ratatui::layout::Rect;
 use ratzilla::{DomBackend, WebRenderer};
 
 use web_sys;
@@ -30,6 +31,7 @@ pub enum ColumnFocus { Feature, Scenario, Step }
 #[derive(Debug, Clone)]
 pub enum ClickableRegion {
     Tab(usize),
+    Tree,
     ExploreFeature {
         feature_idx: usize,
         row_y: u16,
@@ -80,6 +82,8 @@ pub struct AppState {
     pub show_help: bool,
     // Clickable regions (re-registered every render frame)
     pub clickable_regions: Vec<ClickableRegion>,
+    // MindMap tree panel area for mouse hit-testing
+    pub tree_panel_rect: Option<Rect>,
 }
 
 impl AppState {
@@ -130,6 +134,7 @@ impl AppState {
             pending_chat_response: None,
             show_help: false,
             clickable_regions: Vec::new(),
+            tree_panel_rect: None,
         }
     }
 
@@ -285,6 +290,25 @@ impl AppState {
                         && col < tab_ends[*tab_idx]
                     {
                         self.active_tab = *tab_idx;
+                        return;
+                    }
+                }
+                ClickableRegion::Tree => {
+                    if self.active_tab == 1
+                        && let Some(rect) = self.tree_panel_rect
+                        && col >= rect.x
+                        && col < rect.right()
+                        && row >= rect.y
+                        && row < rect.bottom()
+                    {
+                        let pos = ratzilla::ratatui::layout::Position::new(col, row);
+                        if self.tree_state.click_at(pos)
+                            && let Some(id) = mindmap::selected_node_id(&self.tree_state)
+                        {
+                            self.mindmap_index.apply_highlight_categories(id);
+                        }
+                        self.mindmap_selected_id = mindmap::selected_node_id(&self.tree_state)
+                            .map(|s| s.to_string());
                         return;
                     }
                 }

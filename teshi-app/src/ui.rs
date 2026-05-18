@@ -650,6 +650,10 @@ impl AppUi {
             .constraints([Constraint::Min(5), Constraint::Length(6)])
             .split(area);
 
+        // Store tree panel area for mouse hit-testing
+        s.tree_panel_rect = Some(vert[0]);
+        s.clickable_regions.push(crate::ClickableRegion::Tree);
+
         f.render_stateful_widget(tree, vert[0], &mut s.tree_state);
         self.mindmap_context(f, vert[1], s);
     }
