@@ -84,6 +84,8 @@ pub struct AppState {
     pub clickable_regions: Vec<ClickableRegion>,
     // MindMap tree panel area for mouse hit-testing
     pub tree_panel_rect: Option<Rect>,
+    // Accumulated scroll wheel delta (consumed each frame)
+    pub scroll_delta: f64,
 }
 
 impl AppState {
@@ -135,6 +137,7 @@ impl AppState {
             show_help: false,
             clickable_regions: Vec::new(),
             tree_panel_rect: None,
+            scroll_delta: 0.0,
         }
     }
 
@@ -190,6 +193,9 @@ impl AppState {
     }
 
     pub fn poll_runner(&mut self) {
+        // Process accumulated scroll wheel delta first
+        self.process_scroll();
+
         // Process pending AI response (one frame delay so "Thinking..." is visible)
         if let Some(response) = self.pending_chat_response.take() {
             self.chat_messages.pop(); // remove "Thinking..."
@@ -265,6 +271,33 @@ impl AppState {
             return (None, None);
         }
         (Some(cell_x as u16), Some(cell_y as u16))
+    }
+
+    /// Consume accumulated scroll wheel delta and dispatch to active panel.
+    fn process_scroll(&mut self) {
+        let delta = self.scroll_delta;
+        if delta == 0.0 {
+            return;
+        }
+        // Consume in chunks of ~120 (typical browser wheel tick)
+        let steps = (delta.abs() / 120.0).ceil().min(5.0) as i32;
+        let direction = if delta > 0.0 { 1 } else { -1 };
+        self.scroll_delta = 0.0;
+
+        match self.active_tab {
+            1 => {
+                // MindMap tree: scroll up/down via tree_state
+                for _ in 0..steps {
+                    if direction < 0 {
+                        self.tree_state.key_up();
+                    } else {
+                        self.tree_state.key_down();
+                    }
+                }
+                self.sync_tree_selection();
+            }
+            _ => {}
+        }
     }
 
     pub fn handle_mouse(&mut self, event: &MouseEvent) {
@@ -685,6 +718,27 @@ fn main() {
         let mut s = state_mouse.borrow_mut();
         s.handle_mouse(&mouse_event);
     });
+
+    // Wheel/scroll event listener (ratzilla doesn't expose this)
+    {
+        use wasm_bindgen::prelude::Closure;
+        use wasm_bindgen::JsCast;
+        let state_scroll = state.clone();
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            if let Some(el) = doc.get_element_by_id("terminal-body") {
+                let wheel_closure = Closure::<dyn FnMut(_)>::new(move |event: web_sys::WheelEvent| {
+                    let mut s = state_scroll.borrow_mut();
+                    s.scroll_delta += event.delta_y();
+                    event.prevent_default();
+                });
+                let _ = el.add_event_listener_with_callback(
+                    "wheel",
+                    wheel_closure.as_ref().unchecked_ref(),
+                );
+                wheel_closure.forget();
+            }
+        }
+    }
 
     let mut app_ui = AppUi::new();
     terminal.draw_web(move |f| {
