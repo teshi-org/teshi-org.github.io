@@ -59,8 +59,7 @@ img { display: block; max-width: 100%; }
 .nav-inner {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 2rem;
+  justify-content: space-between;
   width: 100%;
   padding: 14px 0;
 }
