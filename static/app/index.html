@@ -164,20 +164,12 @@
 
       @media (max-width: 700px) {
         #terminal {
-          transform: scale(0.65);
-          transform-origin: center;
-        }
-        #terminal-body {
-          font-size: 16px;
-          line-height: 20px;
-        }
-        #terminal-body pre {
-          line-height: 20px;
-          height: 20px;
+          width: 100%;
+          height: 100%;
         }
       }
     </style>
-  <link rel="modulepreload" href="/app/teshi-app-2292dc5d22d46b74.js" crossorigin="anonymous" integrity="sha384-x1iCI4sel8iz7LtHZDk/NYcVWuj3QhXmskl8ND6gS4gjDakJKQ0yiWiKsYABiQVn"><link rel="preload" href="/app/teshi-app-2292dc5d22d46b74_bg.wasm" crossorigin="anonymous" integrity="sha384-bg8t5AvD1wfrIjK10t7OrtfhmSUt8h6byiUGm4Uh6K0JAtNzSorbspWvP9nr4AAO" as="fetch" type="application/wasm"></head>
+  <link rel="modulepreload" href="/app/teshi-app-68a33871d3362173.js" crossorigin="anonymous" integrity="sha384-x1iCI4sel8iz7LtHZDk/NYcVWuj3QhXmskl8ND6gS4gjDakJKQ0yiWiKsYABiQVn"><link rel="preload" href="/app/teshi-app-68a33871d3362173_bg.wasm" crossorigin="anonymous" integrity="sha384-sPAr5tZBD5xpgNxjP9L+Sq/QDnQNezNyQ1q/GIj5HSYhHKRXaGDjXUczDf+PXDz0" as="fetch" type="application/wasm"></head>
   <body>
     <div id="splash">
       <img
@@ -203,8 +195,8 @@
 
     
 <script type="module">
-import init, * as bindings from '/app/teshi-app-2292dc5d22d46b74.js';
-const wasm = await init({ module_or_path: '/app/teshi-app-2292dc5d22d46b74_bg.wasm' });
+import init, * as bindings from '/app/teshi-app-68a33871d3362173.js';
+const wasm = await init({ module_or_path: '/app/teshi-app-68a33871d3362173_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -240,14 +232,25 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
     <!-- Forward wheel events to parent when embedded in an iframe -->
     <script>
-    (function() {
-      try { if (window.self === window.top) return; } catch(e) { return; }
-      var body = document.getElementById('terminal-body');
-      if (!body) return;
-      body.addEventListener('wheel', function(e) {
-        parent.postMessage({ type: '__teshi_scroll', deltaY: e.deltaY }, '*');
-      }, { passive: true });
-    })();
+      (function () {
+        try {
+          if (window.self === window.top) return;
+        } catch (e) {
+          return;
+        }
+        var body = document.getElementById("terminal-body");
+        if (!body) return;
+        body.addEventListener(
+          "wheel",
+          function (e) {
+            parent.postMessage(
+              { type: "__teshi_scroll", deltaY: e.deltaY },
+              "*",
+            );
+          },
+          { passive: true },
+        );
+      })();
     </script>
   </body>
 </html>

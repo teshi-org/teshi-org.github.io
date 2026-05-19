@@ -164,16 +164,8 @@
 
       @media (max-width: 700px) {
         #terminal {
-          transform: scale(0.65);
-          transform-origin: center;
-        }
-        #terminal-body {
-          font-size: 16px;
-          line-height: 20px;
-        }
-        #terminal-body pre {
-          line-height: 20px;
-          height: 20px;
+          width: 100%;
+          height: 100%;
         }
       }
     </style>
@@ -229,14 +221,25 @@
 
     <!-- Forward wheel events to parent when embedded in an iframe -->
     <script>
-    (function() {
-      try { if (window.self === window.top) return; } catch(e) { return; }
-      var body = document.getElementById('terminal-body');
-      if (!body) return;
-      body.addEventListener('wheel', function(e) {
-        parent.postMessage({ type: '__teshi_scroll', deltaY: e.deltaY }, '*');
-      }, { passive: true });
-    })();
+      (function () {
+        try {
+          if (window.self === window.top) return;
+        } catch (e) {
+          return;
+        }
+        var body = document.getElementById("terminal-body");
+        if (!body) return;
+        body.addEventListener(
+          "wheel",
+          function (e) {
+            parent.postMessage(
+              { type: "__teshi_scroll", deltaY: e.deltaY },
+              "*",
+            );
+          },
+          { passive: true },
+        );
+      })();
     </script>
   </body>
 </html>

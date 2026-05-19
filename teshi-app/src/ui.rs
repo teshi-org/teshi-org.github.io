@@ -167,12 +167,9 @@ impl AppUi {
             area,
         );
         // Register tab regions for mouse hit-testing
-        s.clickable_regions
-            .push(crate::ClickableRegion::Tab(0));
-        s.clickable_regions
-            .push(crate::ClickableRegion::Tab(1));
-        s.clickable_regions
-            .push(crate::ClickableRegion::Tab(2));
+        s.clickable_regions.push(crate::ClickableRegion::Tab(0));
+        s.clickable_regions.push(crate::ClickableRegion::Tab(1));
+        s.clickable_regions.push(crate::ClickableRegion::Tab(2));
     }
 
     // ── Content dispatch ──
@@ -196,9 +193,9 @@ impl AppUi {
         let cols = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(30),
-                Constraint::Percentage(50),
+                Constraint::Percentage(15),
+                Constraint::Percentage(45),
+                Constraint::Percentage(40),
             ])
             .split(area);
         self.feature_list(f, cols[0], s);
@@ -307,9 +304,13 @@ impl AppUi {
         let col_width = inner.width;
 
         let line_rows = |content: &str| -> u16 {
-            if col_width < 2 { return 1; }
+            if col_width < 2 {
+                return 1;
+            }
             let w = content.len();
-            if w == 0 { return 1; }
+            if w == 0 {
+                return 1;
+            }
             ((w + col_width as usize - 1) / col_width as usize).max(1) as u16
         };
 
@@ -359,23 +360,21 @@ impl AppUi {
 
         // Register clickable regions for each feature row
         for (i, (start, end)) in feature_rows.iter().enumerate() {
-            s.clickable_regions.push(crate::ClickableRegion::ExploreFeature {
-                feature_idx: i,
-                row_y_start: *start,
-                row_y_end: *end,
-                col_x: inner.x,
-                col_right: inner.right(),
-            });
+            s.clickable_regions
+                .push(crate::ClickableRegion::ExploreFeature {
+                    feature_idx: i,
+                    row_y_start: *start,
+                    row_y_end: *end,
+                    col_x: inner.x,
+                    col_right: inner.right(),
+                });
         }
     }
 
     fn scenario_list(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
         // Pre-extract data to avoid borrow conflicts
         let fi = s.selected_feature_index();
-        let scenario_count = s
-            .selected_feature()
-            .map(|f| f.scenarios.len())
-            .unwrap_or(0);
+        let scenario_count = s.selected_feature().map(|f| f.scenarios.len()).unwrap_or(0);
         let selected_scenario = s.explore_selected_scenario;
         let focused_col = s.explore_focus;
 
@@ -390,9 +389,13 @@ impl AppUi {
         let col_width = inner.width;
 
         let line_rows = |content: &str| -> u16 {
-            if col_width < 2 { return 1; }
+            if col_width < 2 {
+                return 1;
+            }
             let w = content.len();
-            if w == 0 { return 1; }
+            if w == 0 {
+                return 1;
+            }
             ((w + col_width as usize - 1) / col_width as usize).max(1) as u16
         };
 
@@ -455,13 +458,14 @@ impl AppUi {
 
         // Register clickable regions for each scenario
         for (i, (start, end)) in scenario_rows.iter().enumerate() {
-            s.clickable_regions.push(crate::ClickableRegion::ExploreScenario {
-                scenario_idx: i,
-                row_y_start: *start,
-                row_y_end: *end,
-                col_x: inner.x,
-                col_right: inner.right(),
-            });
+            s.clickable_regions
+                .push(crate::ClickableRegion::ExploreScenario {
+                    scenario_idx: i,
+                    row_y_start: *start,
+                    row_y_end: *end,
+                    col_x: inner.x,
+                    col_right: inner.right(),
+                });
         }
     }
 
@@ -491,9 +495,13 @@ impl AppUi {
 
         // Estimate how many terminal rows a rendered line occupies after wrapping.
         let line_rows = |content: &str| -> u16 {
-            if col_width < 2 { return 1; }
+            if col_width < 2 {
+                return 1;
+            }
             let w = content.len();
-            if w == 0 { return 1; }
+            if w == 0 {
+                return 1;
+            }
             ((w + col_width as usize - 1) / col_width as usize).max(1) as u16
         };
 
@@ -515,23 +523,17 @@ impl AppUi {
             if bg_count > 0 {
                 lines.push(Line::from(Span::styled(
                     " Background:",
-                    Style::default()
-                        .fg(TEXT_MUTED)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(TEXT_MUTED).add_modifier(Modifier::BOLD),
                 )));
                 y_pos += line_rows(" Background:");
                 for step in background_steps {
-                    let kw_color =
-                        self.keyword_color(step.keyword_type, &mut last_major);
+                    let kw_color = self.keyword_color(step.keyword_type, &mut last_major);
                     lines.push(Line::from(vec![
                         Span::styled(
                             format!(" {:>6}", step.keyword),
                             Style::default().fg(kw_color),
                         ),
-                        Span::styled(
-                            format!(" {}", step.text),
-                            Style::default().fg(TEXT_MUTED),
-                        ),
+                        Span::styled(format!(" {}", step.text), Style::default().fg(TEXT_MUTED)),
                     ]));
                     y_pos += line_rows(&format!(" {:>6} {}", step.keyword, step.text));
                 }
@@ -554,8 +556,7 @@ impl AppUi {
             // ── Scenario steps ──
             last_major = None;
             for (i, step) in scenario_steps.iter().enumerate() {
-                let kw_color =
-                    self.keyword_color(step.keyword_type, &mut last_major);
+                let kw_color = self.keyword_color(step.keyword_type, &mut last_major);
                 let is_selected = i == selected_step;
                 let body_span = if is_selected {
                     Span::styled(format!(" {}", step.text), highlight_style)
@@ -604,13 +605,14 @@ impl AppUi {
 
         // Register clickable step regions using the tracked row ranges
         for (i, (start, end)) in step_rows.iter().enumerate() {
-            s.clickable_regions.push(crate::ClickableRegion::ExploreStep {
-                step_idx: i,
-                row_y_start: *start,
-                row_y_end: *end,
-                col_x: inner.x,
-                col_right: inner.right(),
-            });
+            s.clickable_regions
+                .push(crate::ClickableRegion::ExploreStep {
+                    step_idx: i,
+                    row_y_start: *start,
+                    row_y_end: *end,
+                    col_x: inner.x,
+                    col_right: inner.right(),
+                });
         }
     }
 
@@ -756,7 +758,8 @@ impl AppUi {
             let max_items = (inner.height as usize).saturating_sub(2).min(count);
             let list_height = (max_items + 2).min(inner.height as usize) as u16;
 
-            let dropdown_area = Rect::new(inner.x, inner.y, inner.width, list_height.min(inner.height));
+            let dropdown_area =
+                Rect::new(inner.x, inner.y, inner.width, list_height.min(inner.height));
             let block = Block::default()
                 .borders(Borders::ALL)
                 .title("Open Scenario")
@@ -872,11 +875,7 @@ impl AppUi {
             };
 
             let is_cursor = buf_row == cursor_row;
-            let spans = self.highlight_gherkin_line(
-                line_str,
-                &mut in_doc_string,
-                &mut last_major,
-            );
+            let spans = self.highlight_gherkin_line(line_str, &mut in_doc_string, &mut last_major);
 
             let styled_line = if is_cursor {
                 Line::from(Span::styled(line_str.to_string(), cursor_style))
@@ -1032,10 +1031,7 @@ impl AppUi {
             Line::from(out)
         } else if line_w < w {
             let mut line = line;
-            line.push_span(Span::styled(
-                " ".repeat(w - line_w),
-                Style::default(),
-            ));
+            line.push_span(Span::styled(" ".repeat(w - line_w), Style::default()));
             line
         } else {
             line
@@ -1046,7 +1042,9 @@ impl AppUi {
 
     fn render_ai_tab(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
         // Layout: sidebar (left, 18 cols) + main (right)
-        if area.width < 25 || area.height < 3 { return; }
+        if area.width < 25 || area.height < 3 {
+            return;
+        }
         let [sidebar_area, main_area] =
             Layout::horizontal([Constraint::Length(18), Constraint::Min(10)]).areas(area);
         self.render_agent_sidebar(f, sidebar_area, s);
@@ -1054,7 +1052,9 @@ impl AppUi {
     }
 
     fn render_agent_sidebar(&self, f: &mut Frame, area: Rect, _s: &AppState) {
-        if area.width < 5 || area.height < 3 { return; }
+        if area.width < 5 || area.height < 3 {
+            return;
+        }
         let block = Block::default()
             .borders(Borders::ALL)
             .title(" Agents ")
@@ -1068,7 +1068,9 @@ impl AppUi {
         let status_char = "○";
         let title = "Default";
         let text = format!("{prefix} {status_char} {title}");
-        let style = Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD);
+        let style = Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD);
         lines.push(Line::styled(text, style));
 
         lines.push(Line::raw(""));
@@ -1079,12 +1081,16 @@ impl AppUi {
     }
 
     fn render_agent_chat(&self, f: &mut Frame, area: Rect, s: &mut AppState) {
-        if area.width < 10 || area.height < 3 { return; }
+        if area.width < 10 || area.height < 3 {
+            return;
+        }
 
         let block = Block::default().borders(Borders::ALL).title("AI Chat");
         let inner = block.inner(area);
         f.render_widget(block, area);
-        if inner.width == 0 || inner.height == 0 { return; }
+        if inner.width == 0 || inner.height == 0 {
+            return;
+        }
 
         // Layout: chat history (top) + status bar (1) + input bar (bottom, min 3)
         let status_height: u16 = 1;
@@ -1094,21 +1100,40 @@ impl AppUi {
 
         let chat_area = Rect::new(inner.x, inner.y, inner.width, chat_height);
         let status_area = Rect::new(inner.x, inner.y + chat_height, inner.width, status_height);
-        let input_area = Rect::new(inner.x, inner.y + chat_height + status_height, inner.width, input_height);
+        let input_area = Rect::new(
+            inner.x,
+            inner.y + chat_height + status_height,
+            inner.width,
+            input_height,
+        );
 
         // ── Chat history ──
         let mut chat_lines: Vec<Line<'static>> = Vec::new();
 
         if s.chat_messages.is_empty() {
-            chat_lines.push(Line::raw("Welcome to AI Chat! Type a message below and press Enter."));
+            chat_lines.push(Line::raw(
+                "Welcome to AI Chat! Type a message below and press Enter.",
+            ));
             chat_lines.push(Line::raw(""));
         }
 
         for (role, content) in &s.chat_messages {
             let is_user = role == "user";
             let is_system = role == "system";
-            let prefix = if is_user { "▶ You" } else if is_system { " ●" } else { "> 🥰" };
-            let role_color = if is_user { AI_USER } else if is_system { TEXT_MUTED } else { AI_ASSISTANT };
+            let prefix = if is_user {
+                "▶ You"
+            } else if is_system {
+                " ●"
+            } else {
+                "> 🥰"
+            };
+            let role_color = if is_user {
+                AI_USER
+            } else if is_system {
+                TEXT_MUTED
+            } else {
+                AI_ASSISTANT
+            };
 
             chat_lines.push(
                 Line::raw(prefix)
@@ -1130,12 +1155,16 @@ impl AppUi {
         // Streaming indicator
         if s.chat_waiting {
             chat_lines.push(
-                Line::raw("> 🥰:")
-                    .style(Style::default().fg(AI_ASSISTANT).add_modifier(Modifier::BOLD)),
+                Line::raw("> 🥰:").style(
+                    Style::default()
+                        .fg(AI_ASSISTANT)
+                        .add_modifier(Modifier::BOLD),
+                ),
             );
-            chat_lines.push(
-                Line::styled("  Thinking...", Style::default().fg(AI_WAITING)),
-            );
+            chat_lines.push(Line::styled(
+                "  Thinking...",
+                Style::default().fg(AI_WAITING),
+            ));
             chat_lines.push(Line::raw(""));
         }
 
@@ -1161,7 +1190,9 @@ impl AppUi {
         };
         if !status_text.is_empty() {
             f.render_widget(
-                Paragraph::new(Text::from(Line::raw(status_text).style(Style::default().fg(Color::Yellow)))),
+                Paragraph::new(Text::from(
+                    Line::raw(status_text).style(Style::default().fg(Color::Yellow)),
+                )),
                 status_area,
             );
         }
@@ -1177,7 +1208,8 @@ impl AppUi {
         let input_display: Text<'static> = if s.chat_input.is_empty() {
             Text::raw("Type your message...")
         } else {
-            let lines: Vec<Line<'static>> = s.chat_input
+            let lines: Vec<Line<'static>> = s
+                .chat_input
                 .lines()
                 .map(|l| Line::from(Span::raw(l.to_string())))
                 .collect();
