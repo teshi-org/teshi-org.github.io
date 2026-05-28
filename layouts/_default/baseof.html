@@ -3,67 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark light">
-  <meta name="theme-color" content="#0d7373" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1a1816" media="(prefers-color-scheme: dark)">
-
   <title>{{ .Title | default .Site.Title }}</title>
   <meta name="description" content="{{ .Description | default .Site.Params.description }}">
-
-  <!-- OG / Social -->
-  <meta property="og:title" content="Teshi — AI Testing Agent">
-  <meta property="og:description" content="Record browser interactions as Gherkin scenarios. Replay, automate, and debug with AI. Free &amp; open source.">
-  <meta property="og:image" content="https://teshi.org/images/logo.png">
-  <meta property="og:url" content="https://teshi.org/">
-  <meta property="og:type" content="website">
-  <meta property="og:locale" content="en_US">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Teshi — AI Testing Agent">
-  <meta name="twitter:description" content="Record browser interactions as Gherkin scenarios. Replay, automate, and debug with AI.">
-  <meta name="twitter:image" content="https://teshi.org/images/logo.png">
-
-  <!-- Structured data (JSON-LD) -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Teshi",
-    "description": "AI Testing Agent — record browser interactions as Gherkin scenarios, replay them, and debug with AI assistance.",
-    "url": "https://teshi.org/",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Web browser (WASM)",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
-    },
-    "license": "https://github.com/teshi-org/teshi/blob/main/LICENSE",
-    "author": {
-      "@type": "Organization",
-      "name": "teshi-org"
-    }
-  }
-  </script>
-
   <link rel="icon" type="image/png" href="/images/logo.png">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="preconnect" href="https://github.com" crossorigin>
   {{ $css := resources.Get "css/main.css" | resources.Minify | resources.Fingerprint }}
   <link rel="stylesheet" href="{{ $css.RelPermalink }}" integrity="{{ $css.Data.Integrity }}">
 </head>
 <body>
-  <!-- Skip to content (accessibility) -->
-  <a class="skip-link" href="#hero">Skip to content</a>
-
-  <!-- Scroll progress indicator -->
-  <div class="scroll-progress" aria-hidden="true"></div>
-
   {{ block "main" . }}{{ end }}
-
-  <!-- Scroll progress, reveal, nav active, mobile nav close -->
-  <script>(function(){var w=window,d=document.documentElement||document.body,prog=document.querySelector('.scroll-progress'),nav=document.querySelector('.nav'),topBtn=document.querySelector('.back-top'),links=document.querySelectorAll('.nav-links a'),sections=document.querySelectorAll('[data-reveal]'),toggle=document.getElementById('nav-toggle'),orbs=document.querySelectorAll('.hero-orb');function scrollFn(){var s=w.scrollY||d.scrollTop||0,h=d.scrollHeight-w.innerHeight;if(prog)prog.style.transform='scaleX('+(h>0?Math.min(s/h,1):0)+')';if(nav)nav.classList.toggle('nav-scrolled',s>20);if(topBtn)topBtn.classList.toggle('back-top--vis',s>500);if(orbs.length){var r=Math.min(s/w.innerHeight*0.5,0.5);orbs[0]&&(orbs[0].style.transform='translateY('+(-r*100)+'px)');orbs[1]&&(orbs[1].style.transform='translateY('+(r*60)+'px)')}}if(sections.length&&w.IntersectionObserver){new IntersectionObserver(function(e){e.forEach(function(e){if(e.isIntersecting){e.target.classList.add('revealed');var id=e.target.getAttribute('id');if(id&&id!==w.location.hash.slice(1)){var a=document.querySelector('.nav-links a[href="#'+id+'"]');if(a){links.forEach(function(l){l.classList.remove('active')});a.classList.add('active')}}}})},{threshold:0.2,rootMargin:'-80px 0px 0px 0px'}).observe(sections[0]);for(var i=1;i<sections.length;i++){new IntersectionObserver(function(e){e.forEach(function(e){if(e.isIntersecting){e.target.classList.add('revealed');var id=e.target.getAttribute('id');if(id&&id!==w.location.hash.slice(1)){var a=document.querySelector('.nav-links a[href="#'+id+'"]');if(a){links.forEach(function(l){l.classList.remove('active')});a.classList.add('active')}}}})},{threshold:0.15,rootMargin:'-80px 0px 0px 0px'}).observe(sections[i])}}w.addEventListener('scroll',scrollFn,{passive:true});scrollFn();if(toggle){document.querySelectorAll('.nav-links a').forEach(function(a){a.addEventListener('click',function(){toggle.checked=false})})}})()</script>
-
-  <!-- Mouse parallax -->
-  <script>(function(){var h=document.querySelector('.hero');if(!h||!window.requestAnimationFrame)return;var p=h.querySelectorAll('[data-parallax]'),raf=null;function move(e){var r=h.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=(e.clientX-cx)/r.width,dy=(e.clientY-cy)/r.height;for(var i=0;i<p.length;i++){var s=p[i],f=parseFloat(s.getAttribute('data-parallax'))||5,sc=Math.min(r.width/1200,1.5);s.style.transform='translate('+(dx*f*sc)+'px,'+(dy*f*sc)+'px)'}}function reset(){for(var i=0;i<p.length;i++)p[i].style.transform=''}h.addEventListener('mousemove',function(e){raf&&cancelAnimationFrame(raf);raf=requestAnimationFrame(function(){move(e)})},{passive:true});h.addEventListener('mouseleave',function(){reset()},{passive:true})})()</script>
 </body>
 </html>

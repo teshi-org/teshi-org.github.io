@@ -1,4 +1,0 @@
-[build]
-target = "index.html"
-dist = "../static/app"
-public_url = "/app/"

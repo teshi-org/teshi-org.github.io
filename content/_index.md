@@ -1,4 +1,4 @@
 ---
-title: "Teshi"
-description: "Teshi — AI Testing Agent"
+title: "teshi"
+description: "teshi — AI Testing Agent"
 ---
