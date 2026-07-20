@@ -9,10 +9,10 @@ dev: build-wasm
 	npm run dev
 
 build-wasm:
-	./scripts/build-wasm.sh
+	bash ./scripts/build-wasm.sh
 
 build:
-	./scripts/build-wasm.sh --release
+	bash ./scripts/build-wasm.sh --release
 	npm run build:web
 
 clean:
