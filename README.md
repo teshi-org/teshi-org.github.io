@@ -1,23 +1,31 @@
 # teshi.org
 
-Minimal single-page website for [teshi](https://github.com/teshi-org/teshi), built with [Hugo](https://gohugo.io/).
+The static GPUI/WebAssembly landing page for [teshi](https://github.com/teshi-org/teshi).
 
 ## Requirements
 
-- Hugo (extended) >= 0.144
+- Rust nightly with the `wasm32-unknown-unknown` target
+- `wasm-bindgen-cli` 0.2.126
+- Node.js 22 or later
+
+Install the project dependencies with:
+
+```bash
+make install
+```
 
 ## Local development
 
 ```bash
-hugo server -D
+make dev
 ```
 
-Then open <http://localhost:1313>.
+Then open <http://127.0.0.1:3000>.
 
 ## Production build
 
 ```bash
-hugo
+make build
 ```
 
-The static site will be generated into `./public`.
+The deployable static site is generated in `dist/`.
