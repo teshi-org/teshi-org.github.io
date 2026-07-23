@@ -1,9 +1,14 @@
 /* TEAM */
-Project: teshi
-Website: https://teshi.org/
-Source: https://github.com/teshi-org/teshi
+  Name: teshi-org
+  Site: https://teshi.org/
+  GitHub: https://github.com/teshi-org/teshi
+
+/* THANKS */
+  Rust and WASM ecosystems
+  Ratzilla / Ratatui (TUI framework)
+  Hugo (static site generator)
 
 /* SITE */
-Language: English
-Standards: HTML5, WebAssembly
-Components: Rust, GPUI, Vite
+  Standards: HTML5, CSS3, WAI-ARIA
+  Components: Hugo, Trunk, Rust → WASM
+  Updated: 2026-05-17
