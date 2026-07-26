@@ -6,10 +6,44 @@
   <title>{{ .Title | default .Site.Title }}</title>
   <meta name="description" content="{{ .Description | default .Site.Params.description }}">
   <link rel="icon" type="image/png" href="/images/logo.png">
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("theme");
+        var allowed = { light: 1, dark: 1 };
+        var theme = (stored && allowed[stored])
+          ? stored
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
   {{ $css := resources.Get "css/main.css" | resources.Minify | resources.Fingerprint }}
   <link rel="stylesheet" href="{{ $css.RelPermalink }}" integrity="{{ $css.Data.Integrity }}">
 </head>
 <body>
+  <button class="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false">🌙</button>
+  <script>
+    (function () {
+      var btn = document.querySelector(".theme-toggle");
+      if (!btn) return;
+      function sync() {
+        var dark = document.documentElement.getAttribute("data-theme") === "dark";
+        btn.setAttribute("aria-pressed", dark ? "true" : "false");
+        btn.textContent = dark ? "☀" : "🌙";
+        btn.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+      }
+      sync();
+      btn.addEventListener("click", function () {
+        var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        try { localStorage.setItem("theme", next); } catch (e) {}
+        sync();
+      });
+    })();
+  </script>
   {{ block "main" . }}{{ end }}
 </body>
 </html>
