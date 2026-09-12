@@ -1,5 +1,5 @@
 baseURL = "https://teshi.org/"
-title = "teshi"
+title = "Teshi"
 languageCode = "en"
 enableRobotsTXT = true
 enableEmoji = false
@@ -9,7 +9,7 @@ disableKinds = ["taxonomy", "term", "RSS", "sitemap", "404"]
   home = ["HTML"]
 
 [params]
-  description = "teshi — AI Testing Agent"
+  description = "Teshi — AI Testing Agent"
 
 [minify]
   disableHTML = false
